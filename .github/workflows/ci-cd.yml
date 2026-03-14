@@ -8,11 +8,10 @@ on:
 
 env:
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  GCP_REGION: ${{ secrets.GCP_REGION }}
-  GKE_CLUSTER: ${{ secrets.GKE_CLUSTER }}
-  GKE_ZONE: ${{ secrets.GKE_ZONE }}
-  IMAGE_NAME: react-backend
-  REGISTRY: ${{ secrets.GCP_REGION }}-docker.pkg.dev
+  GCP_REGION: ${{ secrets.GCP_REGION || 'us-central1' }}
+  ARTIFACT_REGISTRY: ${{ secrets.GCP_REGION || 'us-central1' }}-docker.pkg.dev
+  IMAGE_NAME: digital-id/backend
+  CLOUD_RUN_SERVICE: digital-id-backend
 
 jobs:
   # ── Job 1: Test ─────────────────────────────────────────────
@@ -52,9 +51,6 @@ jobs:
       contents: read
       id-token: write
 
-    outputs:
-      image_tag: ${{ steps.meta.outputs.tags }}
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -69,7 +65,7 @@ jobs:
         uses: google-github-actions/setup-gcloud@v2
 
       - name: Configure Docker for Artifact Registry
-        run: gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
+        run: gcloud auth configure-docker ${{ env.ARTIFACT_REGISTRY }} --quiet
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -78,8 +74,8 @@ jobs:
         id: meta
         run: |
           SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
-          IMAGE_TAG="${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.IMAGE_NAME }}/${{ env.IMAGE_NAME }}:${SHORT_SHA}"
-          IMAGE_LATEST="${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.IMAGE_NAME }}/${{ env.IMAGE_NAME }}:latest"
+          IMAGE_TAG="${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.IMAGE_NAME }}/${{ env.IMAGE_NAME }}:${SHORT_SHA}"
+          IMAGE_LATEST="${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.IMAGE_NAME }}/${{ env.IMAGE_NAME }}:latest"
           echo "tags=${IMAGE_TAG}" >> $GITHUB_OUTPUT
           echo "latest=${IMAGE_LATEST}" >> $GITHUB_OUTPUT
 
@@ -93,61 +89,3 @@ jobs:
             ${{ steps.meta.outputs.latest }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-  # ── Job 3: Deploy to GKE ──────────────────────────────────
-  deploy:
-    name: Deploy to GKE
-    runs-on: ubuntu-latest
-    needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-
-    permissions:
-      contents: read
-      id-token: write
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-
-      - name: Install GKE auth plugin
-        run: gcloud components install gke-gcloud-auth-plugin --quiet
-
-      - name: Get GKE credentials
-        run: |
-          gcloud container clusters get-credentials ${{ env.GKE_CLUSTER }} \
-            --zone ${{ env.GKE_ZONE }} \
-            --project ${{ env.GCP_PROJECT_ID }}
-
-      - name: Deploy to GKE
-        run: |
-          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
-          IMAGE="${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.IMAGE_NAME }}/${{ env.IMAGE_NAME }}:${SHORT_SHA}"
-
-          # Apply k8s manifests
-          kubectl apply -f k8s/namespace.yaml
-          kubectl apply -f k8s/configmap.yaml
-          kubectl apply -f k8s/secret.yaml
-          kubectl apply -f k8s/service.yaml
-          kubectl apply -f k8s/ingress.yaml
-          kubectl apply -f k8s/hpa.yaml
-
-          # Update deployment image and apply
-          sed -i "s|GCP_REGION-docker.pkg.dev/GCP_PROJECT_ID/react-backend/react-backend:latest|${IMAGE}|g" k8s/deployment.yaml
-          kubectl apply -f k8s/deployment.yaml
-
-          # Wait for rollout
-          kubectl rollout status deployment/react-backend -n react-backend --timeout=300s
-
-      - name: Verify deployment
-        run: |
-          kubectl get pods -n react-backend
-          kubectl get svc -n react-backend
