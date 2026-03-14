@@ -32,3 +32,21 @@ build/
 ### VS Code ###
 .vscode/
 .DS_Store
+
+### Cursor ###
+.cursor/
+.bloop/
+.metals/
+
+### Logs ###
+logs/
+*.log
+
+### Docker ###
+docker-compose.override.yml
+
+### Secrets (never commit real secrets) ###
+*.env
+.env.*
+
+k8s/

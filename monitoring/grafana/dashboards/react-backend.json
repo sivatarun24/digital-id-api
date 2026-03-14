@@ -1,0 +1,416 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "title": "HTTP Request Rate (req/s)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_requests_seconds_count{application=\"react-backend\"}[1m]))",
+          "legendFormat": "Total req/s"
+        },
+        {
+          "expr": "sum(rate(http_server_requests_seconds_count{application=\"react-backend\"}[1m])) by (method)",
+          "legendFormat": "{{method}}"
+        }
+      ]
+    },
+    {
+      "title": "Response Latency p50 / p95 / p99",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(http_server_requests_seconds_bucket{application=\"react-backend\"}[5m])) by (le)) * 1000",
+          "legendFormat": "p50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{application=\"react-backend\"}[5m])) by (le)) * 1000",
+          "legendFormat": "p95"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{application=\"react-backend\"}[5m])) by (le)) * 1000",
+          "legendFormat": "p99"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ms" } }
+    },
+    {
+      "title": "4xx / 5xx Error Rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_requests_seconds_count{application=\"react-backend\", status=~\"4..\"}[1m]))",
+          "legendFormat": "4xx/s"
+        },
+        {
+          "expr": "sum(rate(http_server_requests_seconds_count{application=\"react-backend\", status=~\"5..\"}[1m]))",
+          "legendFormat": "5xx/s"
+        }
+      ],
+      "fieldConfig": { "defaults": { "custom": { "fillOpacity": 15 } } }
+    },
+    {
+      "title": "Latency p50/p95/p99 by Endpoint",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(http_server_requests_seconds_bucket{application=\"react-backend\", uri!~\"/actuator.*\"}[5m])) by (le, uri)) * 1000",
+          "legendFormat": "p50 {{uri}}"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{application=\"react-backend\", uri!~\"/actuator.*\"}[5m])) by (le, uri)) * 1000",
+          "legendFormat": "p95 {{uri}}"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{application=\"react-backend\", uri!~\"/actuator.*\"}[5m])) by (le, uri)) * 1000",
+          "legendFormat": "p99 {{uri}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ms" } }
+    },
+    {
+      "title": "4xx by Endpoint",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_requests_seconds_count{application=\"react-backend\", status=~\"4..\"}[1m])) by (uri, status)",
+          "legendFormat": "{{status}} {{uri}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "custom": { "fillOpacity": 15 } } }
+    },
+    {
+      "title": "5xx by Endpoint",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_requests_seconds_count{application=\"react-backend\", status=~\"5..\"}[1m])) by (uri, status)",
+          "legendFormat": "{{status}} {{uri}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "custom": { "fillOpacity": 15 } } }
+    },
+    {
+      "title": "Error Rate % (4xx+5xx / total)",
+      "type": "gauge",
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 48 },
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_requests_seconds_count{application=\"react-backend\", status=~\"[45]..\"}[5m])) / sum(rate(http_server_requests_seconds_count{application=\"react-backend\"}[5m])) * 100",
+          "legendFormat": "Error %"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100, "thresholds": { "steps": [{"color":"green","value":null},{"color":"yellow","value":5},{"color":"red","value":15}] } } }
+    },
+    {
+      "title": "Auth Login Rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 16 },
+      "description": "Login success/failure rate",
+      "targets": [
+        {
+          "expr": "rate(auth_login_total{application=\"react-backend\"}[5m])",
+          "legendFormat": "{{status}}"
+        }
+      ]
+    },
+    {
+      "title": "Auth Register Rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 16 },
+      "targets": [
+        {
+          "expr": "rate(auth_register_total{application=\"react-backend\"}[5m])",
+          "legendFormat": "{{status}}"
+        }
+      ]
+    },
+    {
+      "title": "Password Operations",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 16 },
+      "targets": [
+        {
+          "expr": "rate(auth_password_change_total{application=\"react-backend\"}[5m])",
+          "legendFormat": "change {{status}}"
+        },
+        {
+          "expr": "rate(auth_password_reset_total{application=\"react-backend\"}[5m])",
+          "legendFormat": "reset {{status}}"
+        },
+        {
+          "expr": "rate(auth_password_reset_request_total{application=\"react-backend\"}[5m])",
+          "legendFormat": "reset-request"
+        }
+      ]
+    },
+    {
+      "title": "Login Duration (avg ms)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 24 },
+      "targets": [
+        {
+          "expr": "rate(auth_login_duration_seconds_sum[5m]) / rate(auth_login_duration_seconds_count[5m]) * 1000",
+          "legendFormat": "avg ms"
+        }
+      ]
+    },
+    {
+      "title": "Register Duration (avg ms)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 24 },
+      "targets": [
+        {
+          "expr": "rate(auth_register_duration_seconds_sum[5m]) / rate(auth_register_duration_seconds_count[5m]) * 1000",
+          "legendFormat": "avg ms"
+        }
+      ]
+    },
+    {
+      "title": "Email Sent Rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 28 },
+      "targets": [
+        {
+          "expr": "rate(email_sent_total{application=\"react-backend\"}[5m])",
+          "legendFormat": "{{type}}"
+        },
+        {
+          "expr": "rate(email_failed_total{application=\"react-backend\"}[5m])",
+          "legendFormat": "failed"
+        }
+      ]
+    },
+    {
+      "title": "Email Send Duration (avg ms)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 28 },
+      "targets": [
+        {
+          "expr": "rate(email_send_duration_seconds_sum[5m]) / rate(email_send_duration_seconds_count[5m]) * 1000",
+          "legendFormat": "avg ms"
+        }
+      ]
+    },
+    {
+      "title": "Token Refresh & Logout",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 },
+      "targets": [
+        {
+          "expr": "rate(auth_token_refresh_total{application=\"react-backend\"}[5m])",
+          "legendFormat": "token-refresh"
+        },
+        {
+          "expr": "rate(auth_logout_total{application=\"react-backend\"}[5m])",
+          "legendFormat": "logout"
+        },
+        {
+          "expr": "rate(auth_profile_update_total{application=\"react-backend\"}[5m])",
+          "legendFormat": "profile-update"
+        }
+      ]
+    },
+    {
+      "title": "Process CPU Usage (%)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
+      "targets": [
+        {
+          "expr": "process_cpu_usage{application=\"react-backend\"} * 100",
+          "legendFormat": "App CPU %"
+        },
+        {
+          "expr": "system_cpu_usage{application=\"react-backend\"} * 100",
+          "legendFormat": "System CPU %"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 } }
+    },
+    {
+      "title": "CPU Cores & Process CPU Time",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 },
+      "targets": [
+        {
+          "expr": "system_cpu_count{application=\"react-backend\"}",
+          "legendFormat": "Available Cores"
+        },
+        {
+          "expr": "rate(process_cpu_time_ns_total{application=\"react-backend\"}[1m]) / 1e9",
+          "legendFormat": "CPU Seconds/sec"
+        }
+      ]
+    },
+    {
+      "title": "JVM Heap Memory",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 40 },
+      "targets": [
+        {
+          "expr": "sum(jvm_memory_used_bytes{application=\"react-backend\", area=\"heap\"})",
+          "legendFormat": "Heap Used"
+        },
+        {
+          "expr": "sum(jvm_memory_committed_bytes{application=\"react-backend\", area=\"heap\"})",
+          "legendFormat": "Heap Committed"
+        },
+        {
+          "expr": "sum(jvm_memory_max_bytes{application=\"react-backend\", area=\"heap\"}) > 0",
+          "legendFormat": "Heap Max"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "bytes" } }
+    },
+    {
+      "title": "JVM Non-Heap Memory",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 40 },
+      "targets": [
+        {
+          "expr": "sum(jvm_memory_used_bytes{application=\"react-backend\", area=\"nonheap\"})",
+          "legendFormat": "Non-Heap Used"
+        },
+        {
+          "expr": "sum(jvm_memory_committed_bytes{application=\"react-backend\", area=\"nonheap\"})",
+          "legendFormat": "Non-Heap Committed"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "bytes" } }
+    },
+    {
+      "title": "Heap Used %",
+      "type": "gauge",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 48 },
+      "targets": [
+        {
+          "expr": "sum(jvm_memory_used_bytes{application=\"react-backend\", area=\"heap\"}) / sum(jvm_memory_max_bytes{application=\"react-backend\", area=\"heap\"} > 0) * 100",
+          "legendFormat": "Heap %"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100, "thresholds": { "steps": [{"color":"green","value":null},{"color":"yellow","value":70},{"color":"red","value":90}] } } }
+    },
+    {
+      "title": "Process CPU %",
+      "type": "gauge",
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 48 },
+      "targets": [
+        {
+          "expr": "process_cpu_usage{application=\"react-backend\"} * 100",
+          "legendFormat": "CPU %"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100, "thresholds": { "steps": [{"color":"green","value":null},{"color":"yellow","value":60},{"color":"red","value":85}] } } }
+    },
+    {
+      "title": "JVM Memory by Pool",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 54 },
+      "targets": [
+        {
+          "expr": "jvm_memory_used_bytes{application=\"react-backend\"}",
+          "legendFormat": "{{area}} - {{id}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "bytes" } }
+    },
+    {
+      "title": "GC Pause Duration",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 54 },
+      "targets": [
+        {
+          "expr": "rate(jvm_gc_pause_seconds_sum{application=\"react-backend\"}[1m])",
+          "legendFormat": "GC {{action}} {{cause}} (sec/sec)"
+        },
+        {
+          "expr": "rate(jvm_gc_pause_seconds_count{application=\"react-backend\"}[1m])",
+          "legendFormat": "GC {{action}} (count/sec)"
+        }
+      ]
+    },
+    {
+      "title": "JVM Threads",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 62 },
+      "targets": [
+        {
+          "expr": "jvm_threads_live_threads{application=\"react-backend\"}",
+          "legendFormat": "Live Threads"
+        },
+        {
+          "expr": "jvm_threads_daemon_threads{application=\"react-backend\"}",
+          "legendFormat": "Daemon Threads"
+        },
+        {
+          "expr": "jvm_threads_peak_threads{application=\"react-backend\"}",
+          "legendFormat": "Peak Threads"
+        }
+      ]
+    },
+    {
+      "title": "HikariCP Connections",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 62 },
+      "targets": [
+        {
+          "expr": "hikaricp_connections_active{application=\"react-backend\"}",
+          "legendFormat": "active"
+        },
+        {
+          "expr": "hikaricp_connections_idle{application=\"react-backend\"}",
+          "legendFormat": "idle"
+        },
+        {
+          "expr": "hikaricp_connections_pending{application=\"react-backend\"}",
+          "legendFormat": "pending"
+        }
+      ]
+    },
+    {
+      "title": "Open File Descriptors",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 70 },
+      "targets": [
+        {
+          "expr": "process_files_open_files{application=\"react-backend\"}",
+          "legendFormat": "Open FDs"
+        },
+        {
+          "expr": "process_files_max_files{application=\"react-backend\"}",
+          "legendFormat": "Max FDs"
+        }
+      ]
+    },
+    {
+      "title": "Process Uptime",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 48 },
+      "targets": [
+        {
+          "expr": "process_uptime_seconds{application=\"react-backend\"}",
+          "legendFormat": "uptime"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "tags": ["react-backend", "spring-boot"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "title": "React Backend Dashboard",
+  "uid": "react-backend-dashboard"
+}

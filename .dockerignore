@@ -1,0 +1,17 @@
+target/
+.git/
+.gitignore
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+.cursor/
+.DS_Store
+logs/
+*.log
+docker-compose*.yml
+k8s/
+.github/
+README.md
+HELP.md
