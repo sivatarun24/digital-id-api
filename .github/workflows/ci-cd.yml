@@ -12,6 +12,7 @@ env:
   ARTIFACT_REGISTRY: ${{ secrets.GCP_REGION || 'us-central1' }}-docker.pkg.dev
   IMAGE_NAME: digital-id/backend
   CLOUD_RUN_SERVICE: digital-id-backend
+  CLOUD_RUN_SERVICE_FRONTEND: ${{ vars.CLOUD_RUN_SERVICE_FRONTEND || 'digital-id-frontend' }}
 
 jobs:
   # ── Job 1: Test ─────────────────────────────────────────────
@@ -89,3 +90,67 @@ jobs:
             ${{ steps.meta.outputs.latest }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # ── Job 3: Deploy Backend to Cloud Run ─────────────────────
+  deploy:
+    name: Deploy to Cloud Run
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy Backend to Cloud Run
+        id: deploy
+        env:
+          CLOUD_SQL_INSTANCE: ${{ secrets.CLOUD_SQL_INSTANCE }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_USERNAME: ${{ secrets.DATABASE_USERNAME }}
+          DATABASE_PASSWORD: ${{ secrets.DATABASE_PASSWORD }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
+          KAFKA_BOOTSTRAP_SERVERS: ${{ secrets.KAFKA_BOOTSTRAP_SERVERS }}
+          REDIS_HOST: ${{ secrets.REDIS_HOST }}
+          REDIS_PORT: ${{ secrets.REDIS_PORT }}
+          REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+          MANAGEMENT_SECRET: ${{ secrets.MANAGEMENT_SECRET }}
+        run: |
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          IMAGE="${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.IMAGE_NAME }}/${{ env.IMAGE_NAME }}:${SHORT_SHA}"
+          ENV_VARS="SPRING_PROFILES_ACTIVE=prod@DATABASE_URL=${DATABASE_URL}@DATABASE_USERNAME=${DATABASE_USERNAME}@DATABASE_PASSWORD=${DATABASE_PASSWORD}@JWT_SECRET=${JWT_SECRET}@FRONTEND_URL=${FRONTEND_URL}@KAFKA_BOOTSTRAP_SERVERS=${KAFKA_BOOTSTRAP_SERVERS}@REDIS_HOST=${REDIS_HOST}@REDIS_PORT=${REDIS_PORT}@REDIS_PASSWORD=${REDIS_PASSWORD}@MANAGEMENT_SECRET=${MANAGEMENT_SECRET}"
+          gcloud run deploy ${{ env.CLOUD_RUN_SERVICE }} \
+            --image="$IMAGE" \
+            --region=${{ env.GCP_REGION }} \
+            --platform=managed \
+            --no-allow-unauthenticated \
+            --add-cloudsql-instances="$CLOUD_SQL_INSTANCE" \
+            --set-env-vars="^@^$ENV_VARS"
+
+      - name: Grant Frontend service account permission to invoke Backend
+        run: |
+          PROJECT_ID="${{ env.GCP_PROJECT_ID }}"
+          REGION="${{ env.GCP_REGION }}"
+          BACKEND_SERVICE="${{ env.CLOUD_RUN_SERVICE }}"
+          FRONTEND_SA="${{ secrets.FRONTEND_SERVICE_ACCOUNT }}"
+          if [ -n "$FRONTEND_SA" ]; then
+            gcloud run services add-iam-policy-binding "$BACKEND_SERVICE" \
+              --region="$REGION" \
+              --project="$PROJECT_ID" \
+              --member="serviceAccount:${FRONTEND_SA}" \
+              --role="roles/run.invoker"
+          fi

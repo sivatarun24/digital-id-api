@@ -1,5 +1,6 @@
 package com.astr.react_backend.controller;
 
+import com.astr.react_backend.service.ConnectivityCheckService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -9,11 +10,18 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.Map;
 
 @RestController
 @RequestMapping(value = "/test", produces = MediaType.APPLICATION_JSON_VALUE)
 public class TestApiController {
+
+    private final ConnectivityCheckService connectivityCheckService;
+
+    public TestApiController(ConnectivityCheckService connectivityCheckService) {
+        this.connectivityCheckService = connectivityCheckService;
+    }
 
     @GetMapping("/hello")
     public ResponseEntity<Map<String, String>> testHello(Authentication authentication) {
@@ -48,6 +56,19 @@ public class TestApiController {
                 "status", "OK",
                 "timestamp", Instant.now().toString()
         ));
+    }
+
+    /**
+     * Check connectivity to all configured dependencies (MySQL, Redis, Kafka).
+     * Returns UP, DOWN, or DISABLED per component. No auth required for ops/readiness checks.
+     */
+    @GetMapping("/connectivity")
+    public ResponseEntity<Map<String, Object>> connectivity() {
+        Map<String, Object> body = new HashMap<>(Map.of(
+                "timestamp", Instant.now().toString()
+        ));
+        body.put("connections", connectivityCheckService.checkAll());
+        return ResponseEntity.ok(body);
     }
 
     @GetMapping("/context")
