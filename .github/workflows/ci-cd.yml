@@ -134,8 +134,7 @@ jobs:
           SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
           IMAGE="${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.IMAGE_NAME }}/${{ env.IMAGE_NAME }}:${SHORT_SHA}"
           ENV_VARS="SPRING_PROFILES_ACTIVE=prod\
-
-          @KAFKA_ENABLED=false\
+          @KAFKA_ENABLED=true\
           @REDIS_ENABLED=true\ 
           @DATABASE_URL=${DATABASE_URL}
           @DATABASE_USERNAME=${DATABASE_USERNAME}\
@@ -157,7 +156,8 @@ jobs:
             --add-cloudsql-instances="$CLOUD_SQL_INSTANCE" \
             --vpc-connector="${VPC_CONNECTOR}" \
             --vpc-egress=private-ranges-only \
-            --set-env-vars="^@^$ENV_VARS"
+            --set-env-vars="^@^$ENV_VARS" \
+            --set-secrets="REDIS_PASSWORD=digital-id-redis-password:latest"
 
       - name: Grant Frontend service account permission to invoke Backend
         run: |

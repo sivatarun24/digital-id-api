@@ -95,15 +95,10 @@ public class ConnectivityCheckService {
             out.put("message", "No bootstrap servers configured");
             return out;
         }
-        try {
-            AdminClient admin = adminClient();
-            try {
-                admin.listTopics().listings().get(5, TimeUnit.SECONDS);
-                out.put("status", "UP");
-                out.put("message", "Broker reachable");
-            } finally {
-                admin.close();
-            }
+        try (AdminClient admin = adminClient()) {
+            admin.listTopics().listings().get(3, TimeUnit.SECONDS); // 3s not 5s
+            out.put("status", "UP");
+            out.put("message", "Broker reachable");
         } catch (Exception e) {
             log.debug("Kafka connectivity check failed", e);
             out.put("status", "DOWN");
@@ -115,7 +110,9 @@ public class ConnectivityCheckService {
     private AdminClient adminClient() {
         Properties props = new Properties();
         props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers);
-        props.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, 5000);
+        props.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, 3000);
+        props.put(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, 3000);
+        props.put(AdminClientConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG, 5000);
         return AdminClient.create(props);
     }
 }
