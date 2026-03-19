@@ -24,13 +24,22 @@ public class RedisConfig {
     @Value("${spring.data.redis.password:}")
     private String password;
 
+    @Value("${spring.data.redis.timeout:2000ms}")
+    private Duration timeout;
+
     @Bean
     public RedisConnectionFactory redisConnectionFactory() {
         RedisStandaloneConfiguration config = new RedisStandaloneConfiguration(host, port);
         if (password != null && !password.isBlank()) {
             config.setPassword(password);
         }
-        return new LettuceConnectionFactory(config);
+
+        LettuceClientConfiguration clientConfig = LettuceClientConfiguration.builder()
+                .commandTimeout(timeout)
+                .shutdownTimeout(Duration.ZERO)
+                .build();
+
+        return new LettuceConnectionFactory(config, clientConfig);
     }
 
     @Bean

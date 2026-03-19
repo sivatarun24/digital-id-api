@@ -70,8 +70,8 @@ public class ConnectivityCheckService {
             out.put("message", "Redis not configured (app.redis.enabled=false)");
             return out;
         }
-        try {
-            redis.getConnectionFactory().getConnection().ping();
+        try(RedisConnection conn = redis.getConnectionFactory().getConnection()) {
+            conn.ping();
             out.put("status", "UP");
             out.put("message", "PONG");
         } catch (Exception e) {
