@@ -172,64 +172,6 @@ jobs:
             --vpc-egress=private-ranges-only \
             --env-vars-file=/tmp/env-vars.yaml \
           --set-secrets="REDIS_PASSWORD=digital-id-redis-password:latest"
-#            --set-secrets="DATABASE_PASSWORD=digital-id-db-password:latest,\
-#          JWT_SECRET=digital-id-jwt-secret:latest,\
-#          REDIS_PASSWORD=digital-id-redis-password:latest,\
-#          MAIL_PASSWORD=digital-id-mail-password:latest"
-
-#      - name: Deploy Backend to Cloud Run
-#        id: deploy
-#        env:
-#          CLOUD_SQL_INSTANCE: ${{ secrets.CLOUD_SQL_INSTANCE }}
-#          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-#          DATABASE_USERNAME: ${{ secrets.DATABASE_USERNAME }}
-#          DATABASE_PASSWORD: ${{ secrets.DATABASE_PASSWORD }}
-#          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-#          FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
-#          KAFKA_BOOTSTRAP_SERVERS: ${{ secrets.KAFKA_BOOTSTRAP_SERVERS }}
-#          REDIS_HOST: ${{ secrets.REDIS_HOST }}
-#          REDIS_PORT: ${{ secrets.REDIS_PORT }}
-#          VPC_CONNECTOR: ${{ secrets.VPC_CONNECTOR }}
-#          MAIL_HOST: ${{secrets.MAIL_HOST}}
-#          MAIL_PORT: ${{secrets.MAIL_PORT}}
-#          MAIL_USERNAME: ${{secrets.MAIL_USERNAME}}
-#          MAIL_PASSWORD: ${{secrets.MAIL_PASSWORD}}
-#          MAIL_FROM_ADDRESS: ${{secrets.MAIL_FROM_ADDRESS}}
-#          MAIL_FROM_NAME: ${{secrets.MAIL_FROM_NAME}}
-#          MANAGEMENT_SECRET: ${{ secrets.MANAGEMENT_SECRET }}
-#        run: |
-#          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
-#          IMAGE="${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.IMAGE_NAME }}/${{ env.IMAGE_NAME }}:${SHORT_SHA}"
-#          ENV_VARS="SPRING_PROFILES_ACTIVE=prod\
-#          @KAFKA_ENABLED=true\
-#          @REDIS_ENABLED=true\
-#          @DATABASE_URL=${DATABASE_URL}
-#          @DATABASE_USERNAME=${DATABASE_USERNAME}\
-#          @DATABASE_PASSWORD=${DATABASE_PASSWORD}\
-#          @JWT_SECRET=${JWT_SECRET}\
-#          @FRONTEND_URL=${FRONTEND_URL}\
-#          @KAFKA_BOOTSTRAP_SERVERS=${KAFKA_BOOTSTRAP_SERVERS}\
-#          @REDIS_HOST=${REDIS_HOST}\
-#          @REDIS_PORT=${REDIS_PORT}\
-#          @VPC_CONNECTOR=${VPC_CONNECTOR}\
-#          @MAIL_HOST=${MAIL_HOST}\
-#          @MAIL_PORT=${MAIL_PORT}\
-#          @MAIL_USERNAME=${MAIL_USERNAME}\
-#          @MAIL_PASSWORD=${MAIL_PASSWORD}\
-#          @MAIL_FROM_ADDRESS=${MAIL_FROM_ADDRESS}\
-#          @MAIL_FROM_NAME=${MAIL_FROM_NAME}\
-#          @MANAGEMENT_SECRET=${MANAGEMENT_SECRET}"
-#
-#          gcloud run deploy ${{ env.CLOUD_RUN_SERVICE }} \
-#            --image="$IMAGE" \
-#            --region=${{ env.GCP_REGION }} \
-#            --platform=managed \
-#            --no-allow-unauthenticated \
-#            --add-cloudsql-instances="$CLOUD_SQL_INSTANCE" \
-#            --vpc-connector="${VPC_CONNECTOR}" \
-#            --vpc-egress=private-ranges-only \
-#            --set-env-vars="^@^$ENV_VARS" \
-#            --set-secrets="REDIS_PASSWORD=digital-id-redis-password:latest"
 
       - name: Grant Frontend service account permission to invoke Backend
         run: |
@@ -237,10 +179,16 @@ jobs:
           REGION="${{ env.GCP_REGION }}"
           BACKEND_SERVICE="${{ env.CLOUD_RUN_SERVICE }}"
           FRONTEND_SA="${{ secrets.FRONTEND_SERVICE_ACCOUNT }}"
-          if [ -n "$FRONTEND_SA" ]; then
-            gcloud run services add-iam-policy-binding "$BACKEND_SERVICE" \
-              --region="$REGION" \
-              --project="$PROJECT_ID" \
-              --member="serviceAccount:${FRONTEND_SA}" \
-              --role="roles/run.invoker"
+          
+          if [ -z "$FRONTEND_SA" ]; then
+            echo "ERROR: FRONTEND_SERVICE_ACCOUNT secret is not set"
+            exit 1
           fi
+          
+          gcloud run services add-iam-policy-binding "$BACKEND_SERVICE" \
+            --region="$REGION" \
+            --project="$PROJECT_ID" \
+            --member="serviceAccount:${FRONTEND_SA}" \
+            --role="roles/run.invoker"
+          
+          echo "✅ Granted invoker role to $FRONTEND_SA on $BACKEND_SERVICE"
