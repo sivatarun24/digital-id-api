@@ -9,10 +9,10 @@
         <relativePath/>
     </parent>
 
-    <groupId>com.astr</groupId>
-    <artifactId>react-backend</artifactId>
+    <groupId>com.digitalid</groupId>
+    <artifactId>digital-id-api</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>react-backend</name>
+    <name>digital-id-api</name>
 
     <properties>
         <java.version>17</java.version>

@@ -10,7 +10,7 @@
         <root level="INFO">
             <appender-ref ref="CONSOLE"/>
         </root>
-        <logger name="com.astr.react_backend" level="DEBUG"/>
+        <logger name="com.digitalid.api" level="DEBUG"/>
         <logger name="org.springframework.security" level="DEBUG"/>
     </springProfile>
 
@@ -55,7 +55,7 @@
             <appender-ref ref="JSON_CONSOLE"/>
             <appender-ref ref="FILE"/>
         </root>
-        <logger name="com.astr.react_backend" level="INFO"/>
+        <logger name="com.digitalid.api" level="INFO"/>
     </springProfile>
 
 </configuration>

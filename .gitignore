@@ -50,3 +50,4 @@ docker-compose.override.yml
 .env.*
 
 k8s/
+uploads/
