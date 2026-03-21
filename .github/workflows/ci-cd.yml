@@ -159,7 +159,6 @@ jobs:
           MAIL_USERNAME: "${MAIL_USERNAME}"
           MAIL_PASSWORD: "${MAIL_PASSWORD}"
           MAIL_FROM_ADDRESS: "${MAIL_FROM_ADDRESS}"
-          MANAGEMENT_SECRET: "${MANAGEMENT_SECRET}"
           EOF
 
           gcloud run deploy ${{ env.CLOUD_RUN_SERVICE }} \

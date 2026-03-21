@@ -98,7 +98,7 @@ class AuthServiceTest {
     }
 
     @Test
-    void userLogin_withInactiveAccount_shouldThrow() {
+    void userLogin_withInactiveAccount_shouldThrowForbidden() {
         testUser.setAccountStatus(AccountStatus.INACTIVE);
         LoginRequest request = new LoginRequest("testuser", null, null, "password123");
         when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(testUser));
@@ -106,7 +106,19 @@ class AuthServiceTest {
         ResponseStatusException ex = assertThrows(ResponseStatusException.class,
                 () -> authService.userLogin(request, "127.0.0.1", "TestAgent"));
 
-        assertTrue(ex.getReason().contains("forbidden"));
+        assertEquals(403, ex.getStatusCode().value());
+    }
+
+    @Test
+    void userLogin_withDisabledAccount_shouldThrowForbidden() {
+        testUser.setAccountStatus(AccountStatus.DISABLED);
+        LoginRequest request = new LoginRequest("testuser", null, null, "password123");
+        when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(testUser));
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                () -> authService.userLogin(request, "127.0.0.1", "TestAgent"));
+
+        assertEquals(403, ex.getStatusCode().value());
     }
 
     @Test
@@ -142,12 +154,13 @@ class AuthServiceTest {
         when(userRepository.existsByEmail("new@example.com")).thenReturn(false);
         when(userRepository.existsByPhoneNo(9876543210L)).thenReturn(false);
         when(passwordEncoder.encode("password123")).thenReturn("encoded");
+        when(jwtService.generateEmailVerificationToken(any())).thenReturn("verify-token");
 
         Map<String, Object> result = authService.registerUser(request, "127.0.0.1", "TestAgent");
 
-        assertEquals("Registration successful", result.get("message"));
+        assertTrue(result.get("message").toString().contains("check your email"));
         verify(userRepository).save(any(User.class));
-        verify(emailService).sendWelcomeEmail(eq("new@example.com"), eq("newuser"));
+        verify(emailService).sendVerificationEmail(eq("new@example.com"), eq("newuser"), contains("verify-token"));
     }
 
     @Test
@@ -157,6 +170,33 @@ class AuthServiceTest {
                 9876543210L, null, null, Role.USER, "password123");
 
         when(userRepository.existsByUsername("testuser")).thenReturn(true);
+
+        assertThrows(ResponseStatusException.class,
+                () -> authService.registerUser(request, "127.0.0.1", "TestAgent"));
+    }
+
+    @Test
+    void registerUser_withDuplicateEmail_shouldThrow() {
+        RegisterRequest request = new RegisterRequest(
+                "newuser", "Test", "test@example.com",
+                9876543210L, null, null, Role.USER, "password123");
+
+        when(userRepository.existsByUsername("newuser")).thenReturn(false);
+        when(userRepository.existsByEmail("test@example.com")).thenReturn(true);
+
+        assertThrows(ResponseStatusException.class,
+                () -> authService.registerUser(request, "127.0.0.1", "TestAgent"));
+    }
+
+    @Test
+    void registerUser_withDuplicatePhone_shouldThrow() {
+        RegisterRequest request = new RegisterRequest(
+                "newuser", "Test", "new@example.com",
+                1234567890L, null, null, Role.USER, "password123");
+
+        when(userRepository.existsByUsername("newuser")).thenReturn(false);
+        when(userRepository.existsByEmail("new@example.com")).thenReturn(false);
+        when(userRepository.existsByPhoneNo(1234567890L)).thenReturn(true);
 
         assertThrows(ResponseStatusException.class,
                 () -> authService.registerUser(request, "127.0.0.1", "TestAgent"));
@@ -197,11 +237,13 @@ class AuthServiceTest {
     }
 
     @Test
-    void forgotPassword_withUnknownEmail_shouldThrow() {
+    void forgotPassword_withUnknownEmail_shouldReturnSuccessToPreventEnumeration() {
         when(userRepository.findByEmail("unknown@example.com")).thenReturn(Optional.empty());
 
-        assertThrows(ResponseStatusException.class,
-                () -> authService.forgotPassword("unknown@example.com", "127.0.0.1", "TestAgent"));
+        Map<String, Object> result = authService.forgotPassword("unknown@example.com", "127.0.0.1", "TestAgent");
+
+        assertNotNull(result.get("message"));
+        verify(emailService, never()).sendPasswordResetEmail(any(), any(), any());
     }
 
     @Test
@@ -225,6 +267,79 @@ class AuthServiceTest {
 
         assertThrows(ResponseStatusException.class,
                 () -> authService.resetPassword("bad-token", "newpass123", "127.0.0.1", "TestAgent"));
+    }
+
+    // ── Verify email tests ───────────────────────────────────
+
+    @Test
+    void verifyEmail_withValidToken_shouldActivateAccount() {
+        testUser.setAccountStatus(AccountStatus.INACTIVE);
+        when(jwtService.isEmailVerificationToken("verify-token")).thenReturn(true);
+        when(jwtService.extractUsername("verify-token")).thenReturn("testuser");
+        when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(testUser));
+
+        Map<String, Object> result = authService.verifyEmail("verify-token");
+
+        assertEquals(AccountStatus.ACTIVE, testUser.getAccountStatus());
+        assertTrue(result.get("message").toString().contains("verified"));
+        verify(userRepository).save(testUser);
+        verify(emailService).sendWelcomeEmail(eq("test@example.com"), eq("testuser"));
+    }
+
+    @Test
+    void verifyEmail_withInvalidToken_shouldThrow() {
+        when(jwtService.isEmailVerificationToken("bad-token")).thenReturn(false);
+
+        assertThrows(ResponseStatusException.class,
+                () -> authService.verifyEmail("bad-token"));
+    }
+
+    @Test
+    void verifyEmail_forAlreadyActiveAccount_shouldReturnAlreadyVerifiedMessage() {
+        when(jwtService.isEmailVerificationToken("verify-token")).thenReturn(true);
+        when(jwtService.extractUsername("verify-token")).thenReturn("testuser");
+        when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(testUser));
+
+        Map<String, Object> result = authService.verifyEmail("verify-token");
+
+        assertTrue(result.get("message").toString().contains("already verified"));
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void verifyEmail_forDisabledAccount_shouldThrow() {
+        testUser.setAccountStatus(AccountStatus.DISABLED);
+        when(jwtService.isEmailVerificationToken("verify-token")).thenReturn(true);
+        when(jwtService.extractUsername("verify-token")).thenReturn("testuser");
+        when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(testUser));
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                () -> authService.verifyEmail("verify-token"));
+
+        assertEquals(403, ex.getStatusCode().value());
+    }
+
+    // ── Resend verification tests ────────────────────────────
+
+    @Test
+    void resendVerification_withPendingAccount_shouldSendEmail() {
+        testUser.setAccountStatus(AccountStatus.INACTIVE);
+        when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(testUser));
+        when(jwtService.generateEmailVerificationToken(testUser)).thenReturn("new-verify-token");
+
+        Map<String, Object> result = authService.resendVerification("test@example.com");
+
+        assertNotNull(result.get("message"));
+        verify(emailService).sendVerificationEmail(eq("test@example.com"), eq("testuser"), contains("new-verify-token"));
+    }
+
+    @Test
+    void resendVerification_withActiveAccount_shouldNotSendEmail() {
+        when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(testUser));
+
+        authService.resendVerification("test@example.com");
+
+        verify(emailService, never()).sendVerificationEmail(any(), any(), any());
     }
 
     // ── Change password tests ────────────────────────────────
@@ -258,6 +373,15 @@ class AuthServiceTest {
 
         assertThrows(ResponseStatusException.class,
                 () -> authService.changePassword("testuser", "samepass1", "samepass1", "127.0.0.1", "TestAgent"));
+    }
+
+    @Test
+    void changePassword_withShortNewPassword_shouldThrow() {
+        when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(testUser));
+        when(passwordEncoder.matches("oldpass123", "encoded_password")).thenReturn(true);
+
+        assertThrows(ResponseStatusException.class,
+                () -> authService.changePassword("testuser", "oldpass123", "short", "127.0.0.1", "TestAgent"));
     }
 
     // ── Profile tests ────────────────────────────────────────
@@ -306,6 +430,17 @@ class AuthServiceTest {
 
         assertThrows(ResponseStatusException.class,
                 () -> authService.refreshToken("bad"));
+    }
+
+    @Test
+    void refreshToken_withInactiveUser_shouldThrow() {
+        testUser.setAccountStatus(AccountStatus.INACTIVE);
+        when(jwtService.isRefreshToken("valid-refresh")).thenReturn(true);
+        when(jwtService.extractUsername("valid-refresh")).thenReturn("testuser");
+        when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(testUser));
+
+        assertThrows(ResponseStatusException.class,
+                () -> authService.refreshToken("valid-refresh"));
     }
 
     // ── Check availability tests ─────────────────────────────
