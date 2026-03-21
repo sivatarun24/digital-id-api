@@ -9,6 +9,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.connection.RedisConnection;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.JavaMailSenderImpl;
 import org.springframework.stereotype.Service;
 
 import javax.sql.DataSource;
@@ -29,16 +31,19 @@ public class ConnectivityCheckService {
     private final DataSource dataSource;
     private final ObjectProvider<RedisTemplate<String, Object>> redisTemplateProvider;
     private final ObjectProvider<KafkaTemplate<String, String>> kafkaTemplateProvider;
+    private final JavaMailSender mailSender;
 
     @Value("${spring.kafka.bootstrap-servers:}")
     private String kafkaBootstrapServers;
 
     public ConnectivityCheckService(DataSource dataSource,
                                    ObjectProvider<RedisTemplate<String, Object>> redisTemplateProvider,
-                                   ObjectProvider<KafkaTemplate<String, String>> kafkaTemplateProvider) {
+                                   ObjectProvider<KafkaTemplate<String, String>> kafkaTemplateProvider,
+                                   JavaMailSender mailSender) {
         this.dataSource = dataSource;
         this.redisTemplateProvider = redisTemplateProvider;
         this.kafkaTemplateProvider = kafkaTemplateProvider;
+        this.mailSender = mailSender;
     }
 
     public Map<String, Map<String, Object>> checkAll() {
@@ -46,6 +51,7 @@ public class ConnectivityCheckService {
         result.put("mysql", checkMysql());
         result.put("redis", checkRedis());
         result.put("kafka", checkKafka());
+        result.put("smtp", checkSmtp());
         return result;
     }
 
@@ -104,6 +110,29 @@ public class ConnectivityCheckService {
             log.debug("Kafka connectivity check failed", e);
             out.put("status", "DOWN");
             out.put("message", e.getMessage() != null ? e.getMessage() : "Connection failed");
+        }
+        return out;
+    }
+
+    public Map<String, Object> checkSmtp() {
+        Map<String, Object> out = new HashMap<>();
+        if (!(mailSender instanceof JavaMailSenderImpl impl)) {
+            out.put("status", "UNKNOWN");
+            out.put("message", "Mail sender is not a JavaMailSenderImpl — cannot test connection");
+            return out;
+        }
+        out.put("host", impl.getHost());
+        out.put("port", impl.getPort());
+        out.put("username", impl.getUsername());
+        try {
+            impl.testConnection();
+            out.put("status", "UP");
+            out.put("message", "SMTP authentication successful");
+        } catch (Exception e) {
+            log.debug("SMTP connectivity check failed", e);
+            out.put("status", "DOWN");
+            Throwable cause = e.getCause() != null ? e.getCause() : e;
+            out.put("message", cause.getMessage() != null ? cause.getMessage() : e.getMessage());
         }
         return out;
     }

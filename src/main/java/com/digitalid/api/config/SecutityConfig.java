@@ -37,7 +37,7 @@ public class SecutityConfig {
                         )
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**", "/api/public/**").permitAll()
-                        .requestMatchers("/test/health", "/test/connectivity").permitAll()
+                        .requestMatchers("/test/health", "/test/connectivity", "/test/smtp", "/test/email").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/info", "/actuator/prometheus", "/actuator/metrics").permitAll()
                         .anyRequest().authenticated()
                 )

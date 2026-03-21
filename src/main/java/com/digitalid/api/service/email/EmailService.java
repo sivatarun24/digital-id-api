@@ -37,7 +37,11 @@ public class EmailService {
     // ── Generic send ─────────────────────────────────────────────
 
     public void send(EmailRequest request) {
-        log.info("Sending {} email to {}", request.getEmailType(), request.getTo());
+        log.info("Sending {} email to {} (subject: '{}')", request.getEmailType(), request.getTo(), request.getSubject());
+        if (mailSender instanceof org.springframework.mail.javamail.JavaMailSenderImpl impl) {
+            log.debug("Mail config — host: {}, port: {}, username: {}, from: {} <{}>",
+                    impl.getHost(), impl.getPort(), impl.getUsername(), fromName, fromAddress);
+        }
         long start = System.currentTimeMillis();
         try {
             if (request.isHtml()) {
@@ -177,6 +181,19 @@ public class EmailService {
         send(personalRequest(to, subject, body));
     }
 
+    public void sendTestEmail(String to) {
+        String subject = "DigitalID — SMTP Test";
+        String body = buildHtml(
+                "SMTP Test",
+                "<p>This is a test email sent from the DigitalID API to verify email connectivity.</p>"
+                        + "<p><strong>From:</strong> " + fromAddress + "</p>"
+                        + "<p><strong>To:</strong> " + to + "</p>"
+                        + "<p><strong>Time:</strong> " + java.time.Instant.now() + "</p>"
+                        + "<p>If you received this, SMTP is working correctly.</p>"
+        );
+        send(authRequest(to, subject, body));
+    }
+
     public void sendAccountUpdateEmail(String to, String username, String whatChanged) {
         String subject = "Your account has been updated";
         String body = buildHtml(
@@ -235,10 +252,16 @@ public class EmailService {
             helper.setTo(to);
             helper.setSubject(subject);
             helper.setText(htmlBody, true);
+            log.debug("Attempting SMTP connection to send HTML email to {}", to);
             mailSender.send(mimeMessage);
             log.info("HTML email sent to {}", to);
         } catch (MessagingException | MailException | java.io.UnsupportedEncodingException e) {
-            log.error("Failed to send HTML email to {}: {}", to, e.getMessage());
+            log.error("Failed to send HTML email to {} — {}: {}", to, e.getClass().getSimpleName(), e.getMessage());
+            Throwable cause = e.getCause();
+            while (cause != null) {
+                log.error("  Caused by {}: {}", cause.getClass().getSimpleName(), cause.getMessage());
+                cause = cause.getCause();
+            }
             throw new RuntimeException("Failed to send email", e);
         }
     }
