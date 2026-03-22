@@ -18,4 +18,5 @@ public class RegisterRequest {
     private Gender gender;
     private Role role;
     private String password;
+    private Boolean termsAccepted;
 }

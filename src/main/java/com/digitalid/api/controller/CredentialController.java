@@ -5,6 +5,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Map;
@@ -29,5 +30,16 @@ public class CredentialController {
             Authentication auth,
             @PathVariable String credentialType) {
         return ResponseEntity.ok(credentialService.startVerification(auth.getName(), credentialType));
+    }
+
+    @PostMapping(value = "/{credentialType}/submit", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Map<String, Object>> submitDocument(
+            Authentication auth,
+            @PathVariable String credentialType,
+            @RequestParam("file") MultipartFile file) {
+        if (auth == null || !auth.isAuthenticated()) {
+            return ResponseEntity.status(401).body(Map.of("error", "Unauthenticated"));
+        }
+        return ResponseEntity.ok(credentialService.submitDocument(auth.getName(), credentialType, file));
     }
 }

@@ -28,10 +28,13 @@ public class ActivityController {
         this.userRepository = userRepository;
     }
 
+    @SuppressWarnings("unchecked")
     @GetMapping
-    public ResponseEntity<List<Map<String, Object>>> getActivity(
+    public ResponseEntity<Map<String, Object>> getActivity(
             Authentication auth,
-            @RequestParam(required = false) String type) {
+            @RequestParam(required = false) String type,
+            @RequestParam(defaultValue = "50") int limit,
+            @RequestParam(defaultValue = "0") int offset) {
 
         String username = auth.getName();
         List<AuditLog> logs = auditLogRepository.findByUsernameOrderByCreatedAtDesc(username);
@@ -43,11 +46,17 @@ public class ActivityController {
                     .collect(Collectors.toList());
         }
 
-        List<Map<String, Object>> result = logs.stream()
+        int total = logs.size();
+        List<Map<String, Object>> page = logs.stream()
+                .skip(offset).limit(limit)
                 .map(this::toMap)
                 .collect(Collectors.toList());
 
-        return ResponseEntity.ok(result);
+        return ResponseEntity.ok(Map.of(
+                "activity", page,
+                "total", total,
+                "hasMore", (offset + limit) < total
+        ));
     }
 
     private Map<String, Object> toMap(AuditLog log) {

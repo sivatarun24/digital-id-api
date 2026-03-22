@@ -2,16 +2,15 @@ package com.digitalid.api.service;
 
 import com.digitalid.api.audit.AuditAction;
 import com.digitalid.api.audit.AuditLogService;
-import com.digitalid.api.controller.models.User;
-import com.digitalid.api.controller.models.UserCredential;
-import com.digitalid.api.controller.models.VerificationStatus;
-import com.digitalid.api.repositroy.IdentityVerificationRepository;
-import com.digitalid.api.repositroy.UserCredentialRepository;
-import com.digitalid.api.repositroy.UserRepository;
+import com.digitalid.api.controller.models.*;
+import com.digitalid.api.repositroy.*;
+import com.digitalid.api.service.storage.StorageService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -20,23 +19,33 @@ public class CredentialService {
 
     private static final Set<String> AVAILABLE_TYPES = Set.of(
             "military", "student", "first_responder", "teacher",
-            "healthcare", "government", "senior"
+            "healthcare", "government", "senior", "nonprofit"
+    );
+
+    private static final Set<String> ALLOWED_MIME_TYPES = Set.of(
+            "image/jpeg", "image/png", "image/webp", "application/pdf"
     );
 
     private final UserCredentialRepository credentialRepository;
     private final UserRepository userRepository;
     private final IdentityVerificationRepository identityVerificationRepository;
+    private final DocumentRepository documentRepository;
+    private final StorageService storageService;
     private final NotificationService notificationService;
     private final AuditLogService auditLogService;
 
     public CredentialService(UserCredentialRepository credentialRepository,
                               UserRepository userRepository,
                               IdentityVerificationRepository identityVerificationRepository,
+                              DocumentRepository documentRepository,
+                              StorageService storageService,
                               NotificationService notificationService,
                               AuditLogService auditLogService) {
         this.credentialRepository = credentialRepository;
         this.userRepository = userRepository;
         this.identityVerificationRepository = identityVerificationRepository;
+        this.documentRepository = documentRepository;
+        this.storageService = storageService;
         this.notificationService = notificationService;
         this.auditLogService = auditLogService;
     }
@@ -79,6 +88,60 @@ public class CredentialService {
         auditLogService.log(username, AuditAction.CREDENTIAL_VERIFY_STARTED, credentialType);
 
         return toMap(cred);
+    }
+
+    public Map<String, Object> submitDocument(String username, String credentialType, MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Supporting document is required");
+        }
+        String mime = file.getContentType();
+        if (mime == null || !ALLOWED_MIME_TYPES.contains(mime)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Only JPEG, PNG, WebP, and PDF files are accepted");
+        }
+
+        User user = getUser(username);
+
+        UserCredential cred = credentialRepository.findByUserIdAndCredentialType(user.getId(), credentialType)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Credential not started. Call /start first."));
+
+        if (cred.getStatus() != VerificationStatus.PENDING) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Document can only be submitted for credentials in PENDING status");
+        }
+
+        int seq = documentRepository.countByUser_IdAndDocumentType(user.getId(), credentialType) + 1;
+
+        String storedPath;
+        try {
+            storedPath = storageService.store(user.getId(), credentialType, seq,
+                    file.getOriginalFilename(), file);
+        } catch (IOException e) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to store document");
+        }
+
+        Document doc = Document.builder()
+                .user(user)
+                .documentType(credentialType)
+                .originalFileName(file.getOriginalFilename())
+                .filePath(storedPath)
+                .fileSize(file.getSize())
+                .mimeType(mime)
+                .status(DocumentStatus.PENDING)
+                .build();
+        documentRepository.save(doc);
+
+        notificationService.create(user.getId(), "verification",
+                "Supporting document received",
+                capitalize(credentialType.replace("_", " ")) + " supporting document submitted and under review.");
+        auditLogService.log(username, AuditAction.CREDENTIAL_VERIFY_STARTED,
+                credentialType + " document submitted");
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("message", "Document submitted successfully. Your credential is under review.");
+        result.put("credential", toMap(cred));
+        return result;
     }
 
     public long countVerified(Long userId) {

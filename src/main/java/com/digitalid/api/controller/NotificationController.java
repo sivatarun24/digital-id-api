@@ -26,13 +26,20 @@ public class NotificationController {
     }
 
     @GetMapping
-    public ResponseEntity<Map<String, Object>> getNotifications(Authentication auth) {
+    public ResponseEntity<Map<String, Object>> getNotifications(
+            Authentication auth,
+            @RequestParam(required = false) String type,
+            @RequestParam(defaultValue = "50") int limit,
+            @RequestParam(defaultValue = "0") int offset) {
         Long userId = getUserId(auth);
-        List<Map<String, Object>> notifications = notificationService.getNotifications(userId);
+        List<Map<String, Object>> all = notificationService.getNotifications(userId, type);
+        List<Map<String, Object>> page = all.stream().skip(offset).limit(limit).toList();
         long unreadCount = notificationService.getUnreadCount(userId);
         return ResponseEntity.ok(Map.of(
-                "notifications", notifications,
-                "unreadCount", unreadCount
+                "notifications", page,
+                "unreadCount", unreadCount,
+                "total", all.size(),
+                "hasMore", (offset + limit) < all.size()
         ));
     }
 

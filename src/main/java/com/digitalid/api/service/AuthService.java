@@ -117,6 +117,10 @@ public class AuthService {
 
     public Map<String, Object> registerUser(RegisterRequest registerRequest, String ipAddress, String userAgent) {
         return metrics.timeRegister(() -> {
+            if (registerRequest.getTermsAccepted() == null || !registerRequest.getTermsAccepted()) {
+                metrics.recordRegisterFailure();
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "You must accept the Terms of Service and Privacy Policy to create an account");
+            }
             if (registerRequest.getPassword() == null || registerRequest.getPassword().isBlank()) {
                 metrics.recordRegisterFailure();
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Password cannot be null/empty");
@@ -134,6 +138,7 @@ public class AuthService {
             validateEmail(registerRequest.getEmail());
             validatePhoneno(registerRequest.getPhoneNo());
 
+            LocalDateTime now = LocalDateTime.now();
             User user = User.builder()
                     .username(registerRequest.getUsername())
                     .name(registerRequest.getName())
@@ -142,8 +147,10 @@ public class AuthService {
                     .dateOfBirth(registerRequest.getDateOfBirth())
                     .gender(registerRequest.getGender())
                     .passwordHash(passwordEncoder.encode(registerRequest.getPassword()))
-                    .passwordUpdatedAt(LocalDateTime.now())
+                    .passwordUpdatedAt(now)
                     .role(registerRequest.getRole())
+                    .termsAcceptedAt(now)
+                    .privacyPolicyAcceptedAt(now)
                     .build();
 
             userRepository.save(user);
@@ -412,6 +419,30 @@ public class AuthService {
         return response;
     }
 
+    public Map<String, Object> deleteAccount(String username, String password,
+                                               String ipAddress, String userAgent) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+
+        if (!passwordEncoder.matches(password, user.getPasswordHash())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Incorrect password");
+        }
+
+        auditLogService.log(username, AuditAction.ACCOUNT_DELETE, "Account deleted", ipAddress, userAgent);
+        userRepository.delete(user);
+
+        try {
+            emailService.sendAccountUpdateEmail(user.getEmail(), user.getUsername(),
+                    "Your Digital ID account has been permanently deleted. All associated data has been removed.");
+        } catch (Exception e) {
+            log.warn("Failed to send account deletion email to {}: {}", user.getEmail(), e.getMessage());
+        }
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("message", "Account deleted successfully");
+        return response;
+    }
+
     public Map<String, Object> checkAvailability(String field, String value) {
         if (field == null || field.isBlank() || value == null || value.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Field and value are required");
@@ -496,6 +527,7 @@ public class AuthService {
         userInfo.put("role", user.getRole());
         userInfo.put("accountStatus", user.getAccountStatus());
         userInfo.put("lastLoginAt", user.getLastLoginAt());
+        userInfo.put("twoFactorEnabled", Boolean.TRUE.equals(user.getTwoFactorEnabled()));
         return userInfo;
     }
 }

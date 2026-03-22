@@ -148,7 +148,7 @@ class AuthServiceTest {
     void registerUser_withValidData_shouldSucceed() {
         RegisterRequest request = new RegisterRequest(
                 "newuser", "New User", "new@example.com",
-                9876543210L, LocalDate.of(1995, 1, 1), Gender.MALE, Role.USER, "password123");
+                9876543210L, LocalDate.of(1995, 1, 1), Gender.MALE, Role.USER, "password123", true);
 
         when(userRepository.existsByUsername("newuser")).thenReturn(false);
         when(userRepository.existsByEmail("new@example.com")).thenReturn(false);
@@ -167,7 +167,7 @@ class AuthServiceTest {
     void registerUser_withDuplicateUsername_shouldThrow() {
         RegisterRequest request = new RegisterRequest(
                 "testuser", "Test", "new@example.com",
-                9876543210L, null, null, Role.USER, "password123");
+                9876543210L, null, null, Role.USER, "password123", true);
 
         when(userRepository.existsByUsername("testuser")).thenReturn(true);
 
@@ -179,7 +179,7 @@ class AuthServiceTest {
     void registerUser_withDuplicateEmail_shouldThrow() {
         RegisterRequest request = new RegisterRequest(
                 "newuser", "Test", "test@example.com",
-                9876543210L, null, null, Role.USER, "password123");
+                9876543210L, null, null, Role.USER, "password123", true);
 
         when(userRepository.existsByUsername("newuser")).thenReturn(false);
         when(userRepository.existsByEmail("test@example.com")).thenReturn(true);
@@ -192,7 +192,7 @@ class AuthServiceTest {
     void registerUser_withDuplicatePhone_shouldThrow() {
         RegisterRequest request = new RegisterRequest(
                 "newuser", "Test", "new@example.com",
-                1234567890L, null, null, Role.USER, "password123");
+                1234567890L, null, null, Role.USER, "password123", true);
 
         when(userRepository.existsByUsername("newuser")).thenReturn(false);
         when(userRepository.existsByEmail("new@example.com")).thenReturn(false);
@@ -206,7 +206,7 @@ class AuthServiceTest {
     void registerUser_withShortPassword_shouldThrow() {
         RegisterRequest request = new RegisterRequest(
                 "newuser", "New", "new@example.com",
-                9876543210L, null, null, Role.USER, "short");
+                9876543210L, null, null, Role.USER, "short", true);
 
         assertThrows(ResponseStatusException.class,
                 () -> authService.registerUser(request, "127.0.0.1", "TestAgent"));
@@ -216,7 +216,7 @@ class AuthServiceTest {
     void registerUser_withNullPassword_shouldThrow() {
         RegisterRequest request = new RegisterRequest(
                 "newuser", "New", "new@example.com",
-                9876543210L, null, null, Role.USER, null);
+                9876543210L, null, null, Role.USER, null, true);
 
         assertThrows(ResponseStatusException.class,
                 () -> authService.registerUser(request, "127.0.0.1", "TestAgent"));

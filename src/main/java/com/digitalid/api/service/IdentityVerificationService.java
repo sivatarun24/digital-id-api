@@ -86,22 +86,21 @@ public class IdentityVerificationService {
                 .frontFilePath(frontPath)
                 .backFilePath(backPath)
                 .selfieFilePath(selfiePath)
-                .status(VerificationStatus.VERIFIED) // auto-approve for demo
-                .reviewedAt(LocalDateTime.now())
+                .status(VerificationStatus.PENDING)
                 .build();
 
         iv = repo.save(iv);
 
         notificationService.create(user.getId(), "verification",
-                "Identity verified",
-                "Congratulations! Your identity has been successfully verified. You now have full access.");
+                "Identity verification submitted",
+                "Your identity documents have been received and are under review. You'll be notified once the review is complete.");
         auditLogService.log(username, AuditAction.IDENTITY_VERIFY_SUBMITTED, idType);
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("status", iv.getStatus().name().toLowerCase());
         result.put("idType", iv.getIdType());
         result.put("submittedAt", iv.getSubmittedAt().toLocalDate().toString());
-        result.put("reviewedAt", iv.getReviewedAt().toLocalDate().toString());
+        result.put("reviewedAt", null);
         return result;
     }
 

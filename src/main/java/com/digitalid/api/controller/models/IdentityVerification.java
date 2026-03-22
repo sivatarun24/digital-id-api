@@ -7,7 +7,9 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "identity_verifications", indexes = {
-        @Index(name = "idx_idverif_user_id", columnList = "user_id")
+        @Index(name = "idx_idverif_user_id", columnList = "user_id"),
+        @Index(name = "idx_idverif_user_status", columnList = "user_id, status"),
+        @Index(name = "idx_idverif_submitted", columnList = "submitted_at")
 })
 @Getter
 @Setter

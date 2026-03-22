@@ -65,11 +65,14 @@ public class User {
 
     private Integer failedLoginAttempts;
 
-//    private LocalDateTime termsAcceptedAt;
-//
-//    private LocalDateTime privacyPolicyAcceptedAt;
+    private LocalDateTime termsAcceptedAt;
+
+    private LocalDateTime privacyPolicyAcceptedAt;
 
     private Boolean twoFactorEnabled;
+
+    @Column(name = "two_factor_secret", length = 64)
+    private String twoFactorSecret;
 
     private Boolean marketingOptIn;
 

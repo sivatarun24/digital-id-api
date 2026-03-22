@@ -20,9 +20,14 @@ public class NotificationService {
         this.notificationRepository = notificationRepository;
     }
 
-    public List<Map<String, Object>> getNotifications(Long userId) {
-        return notificationRepository.findByUserIdOrderByCreatedAtDesc(userId)
-                .stream().map(this::toMap).collect(Collectors.toList());
+    public List<Map<String, Object>> getNotifications(Long userId, String type) {
+        List<Notification> list;
+        if (type != null && !type.isBlank() && !type.equals("all")) {
+            list = notificationRepository.findByUserIdAndTypeOrderByCreatedAtDesc(userId, type.toLowerCase());
+        } else {
+            list = notificationRepository.findByUserIdOrderByCreatedAtDesc(userId);
+        }
+        return list.stream().map(this::toMap).collect(Collectors.toList());
     }
 
     public long getUnreadCount(Long userId) {

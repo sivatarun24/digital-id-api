@@ -7,7 +7,11 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "documents")
+@Table(name = "documents", indexes = {
+        @Index(name = "idx_doc_user_id", columnList = "user_id"),
+        @Index(name = "idx_doc_uploaded_at", columnList = "uploaded_at"),
+        @Index(name = "idx_doc_user_type", columnList = "user_id, document_type")
+})
 @Getter
 @Setter
 @NoArgsConstructor

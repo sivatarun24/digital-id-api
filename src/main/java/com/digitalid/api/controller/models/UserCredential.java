@@ -6,9 +6,15 @@ import lombok.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "user_credentials", uniqueConstraints = {
-        @UniqueConstraint(columnNames = {"user_id", "credential_type"})
-})
+@Table(name = "user_credentials",
+        uniqueConstraints = {
+                @UniqueConstraint(columnNames = {"user_id", "credential_type"})
+        },
+        indexes = {
+                @Index(name = "idx_cred_user_id", columnList = "user_id"),
+                @Index(name = "idx_cred_user_status", columnList = "user_id, status")
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor

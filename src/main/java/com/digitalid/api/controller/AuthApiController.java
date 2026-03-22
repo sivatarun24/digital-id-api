@@ -18,10 +18,13 @@ public class AuthApiController {
 
     private final AuthService authService;
     private final ApiMetrics metrics;
+    private final com.digitalid.api.service.TwoFactorService twoFactorService;
 
-    public AuthApiController(AuthService authService, ApiMetrics metrics) {
+    public AuthApiController(AuthService authService, ApiMetrics metrics,
+                             com.digitalid.api.service.TwoFactorService twoFactorService) {
         this.authService = authService;
         this.metrics = metrics;
+        this.twoFactorService = twoFactorService;
     }
 
     @PostMapping(value = "/login", consumes = MediaType.APPLICATION_JSON_VALUE)
@@ -186,6 +189,24 @@ public class AuthApiController {
         return ResponseEntity.ok(response);
     }
 
+    @DeleteMapping(value = "/account", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<Map<String, Object>> deleteAccount(
+            Authentication authentication,
+            @RequestBody Map<String, String> body,
+            HttpServletRequest httpRequest) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Unauthenticated"));
+        }
+        String password = body != null ? body.get("password") : null;
+        if (password == null || password.isBlank()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", "Password is required to confirm account deletion"));
+        }
+        Map<String, Object> response = authService.deleteAccount(
+                authentication.getName(), password,
+                getClientIp(httpRequest), httpRequest.getHeader("User-Agent"));
+        return ResponseEntity.ok(response);
+    }
+
     @GetMapping("/check-availability")
     public ResponseEntity<Map<String, Object>> checkAvailability(
             @RequestParam String field,
@@ -210,6 +231,42 @@ public class AuthApiController {
 
         Map<String, Object> profile = authService.getUserProfile(authentication.getName());
         return ResponseEntity.ok(profile);
+    }
+
+    @GetMapping("/2fa/setup")
+    public ResponseEntity<Map<String, Object>> twoFactorSetup(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Unauthenticated"));
+        }
+        return ResponseEntity.ok(twoFactorService.setupTwoFactor(authentication.getName()));
+    }
+
+    @PostMapping(value = "/2fa/enable", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<Map<String, Object>> twoFactorEnable(
+            Authentication authentication,
+            @RequestBody Map<String, String> body) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Unauthenticated"));
+        }
+        String code = body != null ? body.get("code") : null;
+        if (code == null || code.isBlank()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", "Authenticator code is required"));
+        }
+        return ResponseEntity.ok(twoFactorService.enableTwoFactor(authentication.getName(), code.trim()));
+    }
+
+    @PostMapping(value = "/2fa/disable", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<Map<String, Object>> twoFactorDisable(
+            Authentication authentication,
+            @RequestBody Map<String, String> body) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Unauthenticated"));
+        }
+        String code = body != null ? body.get("code") : null;
+        if (code == null || code.isBlank()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", "Authenticator code is required"));
+        }
+        return ResponseEntity.ok(twoFactorService.disableTwoFactor(authentication.getName(), code.trim()));
     }
 
     private String getClientIp(HttpServletRequest request) {

@@ -76,7 +76,7 @@ class AuthApiControllerTest {
     void register_withValidRequest_shouldReturn200() throws Exception {
         RegisterRequest request = new RegisterRequest(
                 "newuser", "New User", "new@example.com",
-                1234567890L, null, Gender.MALE, Role.USER, "password123");
+                1234567890L, null, Gender.MALE, Role.USER, "password123", true);
 
         Map<String, Object> mockResponse = Map.of("message", "Registration successful");
         when(authService.registerUser(any(), any(), any())).thenReturn(mockResponse);
