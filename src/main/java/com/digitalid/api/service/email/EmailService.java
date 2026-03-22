@@ -95,6 +95,21 @@ public class EmailService {
         send(authRequest(to, subject, body));
     }
 
+    public void sendPasswordChangeOtpEmail(String to, String username, String otp) {
+        String subject = "Your password change verification code";
+        String body = buildHtml(
+                "Password Change Verification",
+                "<p>Hi <strong>" + username + "</strong>,</p>"
+                        + "<p>Use the verification code below to confirm your password change:</p>"
+                        + "<p style=\"font-size:28px;font-weight:700;letter-spacing:0.22em;"
+                        + "margin:24px 0;padding:16px;text-align:center;background:#f3f4f6;"
+                        + "border-radius:8px;color:#111827;\">" + otp + "</p>"
+                        + "<p>This code will expire in 10 minutes.</p>"
+                        + "<p>If you did not request this, you can ignore this email and your password will stay unchanged.</p>"
+        );
+        send(authRequest(to, subject, body));
+    }
+
     public void sendWelcomeEmail(String to, String username) {
         String subject = "Welcome to " + fromName + "!";
         String body = buildHtml(

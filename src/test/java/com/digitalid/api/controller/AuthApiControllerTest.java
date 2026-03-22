@@ -125,10 +125,25 @@ class AuthApiControllerTest {
 
     @Test
     @WithMockUser(username = "testuser")
+    void requestChangePasswordOtp_authenticated_shouldReturn200() throws Exception {
+        RequestPasswordChangeOtpRequest request = new RequestPasswordChangeOtpRequest("oldpass123");
+        Map<String, Object> mockResponse = Map.of("message", "A verification code has been sent to your email address.");
+        when(authService.requestPasswordChangeOtp(any(), any(), any(), any()))
+                .thenReturn(mockResponse);
+
+        mockMvc.perform(post("/api/auth/change-password/request-otp")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").exists());
+    }
+
+    @Test
+    @WithMockUser(username = "testuser")
     void changePassword_authenticated_shouldReturn200() throws Exception {
-        ChangePasswordRequest request = new ChangePasswordRequest("oldpass123", "newpass1234");
+        ChangePasswordRequest request = new ChangePasswordRequest("oldpass123", "newpass1234", "newpass1234", "123456");
         Map<String, Object> mockResponse = Map.of("message", "Password changed successfully");
-        when(authService.changePassword(any(), any(), any(), any(), any()))
+        when(authService.changePassword(any(), any(), any(), any(), any(), any()))
                 .thenReturn(mockResponse);
 
         mockMvc.perform(post("/api/auth/change-password")
