@@ -11,4 +11,5 @@ import java.util.Optional;
 public interface DocumentRepository extends JpaRepository<Document, Long> {
     List<Document> findByUser_IdOrderByUploadedAtDesc(Long userId);
     Optional<Document> findByIdAndUser_Id(Long id, Long userId);
+    int countByUser_IdAndDocumentType(Long userId, String documentType);
 }

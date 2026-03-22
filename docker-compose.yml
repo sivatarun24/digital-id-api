@@ -1,7 +1,7 @@
 services:
   mysql:
     image: mysql:8.0
-    container_name: react-backend-mysql
+    container_name: digital-id-mysql
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
       MYSQL_DATABASE: ${DB_NAME}
@@ -18,7 +18,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: react-backend-redis
+    container_name: digital-id-redis
     ports:
       - "6379:6379"
     volumes:
@@ -31,7 +31,7 @@ services:
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
-    container_name: react-backend-zookeeper
+    container_name: digital-id-zookeeper
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
@@ -42,7 +42,7 @@ services:
 
   kafka:
     image: confluentinc/cp-kafka:7.5.0
-    container_name: react-backend-kafka
+    container_name: digital-id-kafka
     depends_on:
       - zookeeper
     ports:
@@ -58,7 +58,7 @@ services:
 
   app:
     build: .
-    container_name: react-backend-app
+    container_name: digital-id-app
     ports:
       - "8080:8080"
     env_file:
@@ -86,7 +86,7 @@ services:
 
   prometheus:
     image: prom/prometheus:latest
-    container_name: react-backend-prometheus
+    container_name: digital-id-prometheus
     ports:
       - "9090:9090"
     volumes:
@@ -100,7 +100,7 @@ services:
 
   grafana:
     image: grafana/grafana:latest
-    container_name: react-backend-grafana
+    container_name: digital-id-grafana
     ports:
       - "3001:3000"
     environment:
@@ -117,7 +117,7 @@ services:
 
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
-    container_name: react-backend-elasticsearch
+    container_name: digital-id-elasticsearch
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
@@ -135,7 +135,7 @@ services:
 
   kibana:
     image: docker.elastic.co/kibana/kibana:8.11.0
-    container_name: react-backend-kibana
+    container_name: digital-id-kibana
     ports:
       - "5601:5601"
     environment:
