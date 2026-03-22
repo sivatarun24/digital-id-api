@@ -167,7 +167,7 @@ jobs:
             --image="$IMAGE" \
             --region=${{ env.GCP_REGION }} \
             --platform=managed \
-            --no-allow-unauthenticated \
+            --allow-unauthenticated \
             --add-cloudsql-instances="${CLOUD_SQL_INSTANCE}" \
             --vpc-connector="${VPC_CONNECTOR}" \
             --vpc-egress=private-ranges-only \
