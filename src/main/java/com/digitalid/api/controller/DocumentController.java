@@ -41,6 +41,15 @@ public class DocumentController {
         return ResponseEntity.ok(doc);
     }
 
+    @PutMapping(value = "/{id}/file", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Map<String, Object>> replaceDocument(
+            Authentication auth,
+            @PathVariable Long id,
+            @RequestParam("file") MultipartFile file) throws IOException {
+        Map<String, Object> doc = documentService.replaceDocument(auth.getName(), id, file);
+        return ResponseEntity.ok(doc);
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Map<String, Object>> deleteDocument(
             Authentication auth,

@@ -3,6 +3,7 @@ package com.digitalid.api.service;
 import com.digitalid.api.audit.AuditAction;
 import com.digitalid.api.audit.AuditLogService;
 import com.digitalid.api.controller.models.Document;
+import com.digitalid.api.controller.models.DocumentStatus;
 import com.digitalid.api.controller.models.User;
 import com.digitalid.api.repositroy.DocumentRepository;
 import com.digitalid.api.repositroy.UserRepository;
@@ -114,6 +115,44 @@ public class DocumentService {
         } catch (IOException e) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Could not read file");
         }
+    }
+
+    public Map<String, Object> replaceDocument(
+            String username, Long documentId, MultipartFile file) throws IOException {
+
+        User user = getUser(username);
+        Document doc = documentRepository.findByIdAndUser_Id(documentId, user.getId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Document not found"));
+
+        if (file == null || file.isEmpty())
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "File is required");
+
+        String mimeType = file.getContentType();
+        if (mimeType == null || (!mimeType.startsWith("image/") && !mimeType.equals("application/pdf")))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only images and PDFs are allowed");
+        if (file.getSize() > 10L * 1024 * 1024)
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "File size must not exceed 10 MB");
+
+        // Delete old file then store replacement; use document ID as seq to avoid naming conflicts
+        storageService.delete(doc.getFilePath());
+        String newPath = storageService.store(
+                user.getId(), doc.getDocumentType(), doc.getId().intValue(),
+                file.getOriginalFilename(), file);
+
+        doc.setOriginalFileName(file.getOriginalFilename());
+        doc.setFilePath(newPath);
+        doc.setFileSize(file.getSize());
+        doc.setMimeType(mimeType);
+        doc.setStatus(DocumentStatus.PENDING);
+        doc = documentRepository.save(doc);
+
+        notificationService.create(user.getId(), "verification",
+                "Document updated for review",
+                "Your " + doc.getDocumentType().replace("_", " ") + " has been re-submitted for verification.");
+        auditLogService.log(username, AuditAction.DOCUMENT_UPLOAD,
+                doc.getDocumentType() + " (replaced): " + file.getOriginalFilename());
+
+        return toMap(doc);
     }
 
     public String getDocumentMimeType(String username, Long documentId) {
