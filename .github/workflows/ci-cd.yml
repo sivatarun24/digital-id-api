@@ -135,6 +135,7 @@ jobs:
           MAIL_FROM_ADDRESS: ${{ secrets.MAIL_FROM_ADDRESS }}
           MAIL_FROM_NAME: ${{ secrets.MAIL_FROM_NAME }}
           MANAGEMENT_SECRET: ${{ secrets.MANAGEMENT_SECRET }}
+          GCS_BUCKET_NAME: ${{secrets.GCS_BUCKET_NAME}}
         run: |
           SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
           IMAGE="${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.IMAGE_NAME }}/${{ env.IMAGE_NAME }}:${SHORT_SHA}"
@@ -159,6 +160,7 @@ jobs:
           MAIL_USERNAME: "${MAIL_USERNAME}"
           MAIL_PASSWORD: "${MAIL_PASSWORD}"
           MAIL_FROM_ADDRESS: "${MAIL_FROM_ADDRESS}"
+          GCS_BUCKET_NAME: "{GCS_BUCKET_NAME}"
           EOF
 
           gcloud run deploy ${{ env.CLOUD_RUN_SERVICE }} \
