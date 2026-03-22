@@ -51,5 +51,4 @@ docker-compose.override.yml
 
 k8s/
 uploads/
-storage/
 digital-id-api.postman_collection.json
