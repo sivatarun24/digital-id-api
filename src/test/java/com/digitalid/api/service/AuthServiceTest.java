@@ -8,6 +8,7 @@ import com.digitalid.api.service.email.EmailService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -345,43 +346,75 @@ class AuthServiceTest {
     // ── Change password tests ────────────────────────────────
 
     @Test
-    void changePassword_withCorrectOldPassword_shouldSucceed() {
+    void requestPasswordChangeOtp_withCorrectOldPassword_shouldSucceed() {
+        when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(testUser));
+        when(passwordEncoder.matches("oldpass123", "encoded_password")).thenReturn(true);
+
+        Map<String, Object> result = authService.requestPasswordChangeOtp(
+                "testuser", "oldpass123", "127.0.0.1", "TestAgent");
+
+        assertEquals("A verification code has been sent to your email address.", result.get("message"));
+        verify(emailService).sendPasswordChangeOtpEmail(eq("test@example.com"), eq("testuser"), anyString());
+    }
+
+    @Test
+    void requestPasswordChangeOtp_withWrongOldPassword_shouldThrow() {
+        when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(testUser));
+        when(passwordEncoder.matches("wrong", "encoded_password")).thenReturn(false);
+
+        assertThrows(ResponseStatusException.class,
+                () -> authService.requestPasswordChangeOtp("testuser", "wrong", "127.0.0.1", "TestAgent"));
+    }
+
+    @Test
+    void changePassword_withCorrectOldPasswordAndOtp_shouldSucceed() {
         when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(testUser));
         when(passwordEncoder.matches("oldpass123", "encoded_password")).thenReturn(true);
         when(passwordEncoder.encode("newpass1234")).thenReturn("new_encoded");
 
+        authService.requestPasswordChangeOtp("testuser", "oldpass123", "127.0.0.1", "TestAgent");
+        ArgumentCaptor<String> otpCaptor = ArgumentCaptor.forClass(String.class);
+        verify(emailService).sendPasswordChangeOtpEmail(eq("test@example.com"), eq("testuser"), otpCaptor.capture());
+        clearInvocations(emailService);
+
         Map<String, Object> result = authService.changePassword(
-                "testuser", "oldpass123", "newpass1234", "127.0.0.1", "TestAgent");
+                "testuser", "oldpass123", "newpass1234", otpCaptor.getValue(), "127.0.0.1", "TestAgent");
 
         assertEquals("Password changed successfully", result.get("message"));
         verify(emailService).sendAccountUpdateEmail(eq("test@example.com"), eq("testuser"), anyString());
     }
 
     @Test
-    void changePassword_withWrongOldPassword_shouldThrow() {
-        when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(testUser));
-        when(passwordEncoder.matches("wrong", "encoded_password")).thenReturn(false);
-
-        assertThrows(ResponseStatusException.class,
-                () -> authService.changePassword("testuser", "wrong", "newpass1234", "127.0.0.1", "TestAgent"));
-    }
-
-    @Test
     void changePassword_sameAsOld_shouldThrow() {
         when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(testUser));
         when(passwordEncoder.matches("samepass1", "encoded_password")).thenReturn(true);
+        authService.requestPasswordChangeOtp("testuser", "samepass1", "127.0.0.1", "TestAgent");
+        ArgumentCaptor<String> otpCaptor = ArgumentCaptor.forClass(String.class);
+        verify(emailService).sendPasswordChangeOtpEmail(eq("test@example.com"), eq("testuser"), otpCaptor.capture());
 
         assertThrows(ResponseStatusException.class,
-                () -> authService.changePassword("testuser", "samepass1", "samepass1", "127.0.0.1", "TestAgent"));
+                () -> authService.changePassword("testuser", "samepass1", "samepass1", otpCaptor.getValue(), "127.0.0.1", "TestAgent"));
     }
 
     @Test
     void changePassword_withShortNewPassword_shouldThrow() {
         when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(testUser));
         when(passwordEncoder.matches("oldpass123", "encoded_password")).thenReturn(true);
+        authService.requestPasswordChangeOtp("testuser", "oldpass123", "127.0.0.1", "TestAgent");
+        ArgumentCaptor<String> otpCaptor = ArgumentCaptor.forClass(String.class);
+        verify(emailService).sendPasswordChangeOtpEmail(eq("test@example.com"), eq("testuser"), otpCaptor.capture());
 
         assertThrows(ResponseStatusException.class,
-                () -> authService.changePassword("testuser", "oldpass123", "short", "127.0.0.1", "TestAgent"));
+                () -> authService.changePassword("testuser", "oldpass123", "short", otpCaptor.getValue(), "127.0.0.1", "TestAgent"));
+    }
+
+    @Test
+    void changePassword_withoutOtpRequest_shouldThrow() {
+        when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(testUser));
+        when(passwordEncoder.matches("oldpass123", "encoded_password")).thenReturn(true);
+
+        assertThrows(ResponseStatusException.class,
+                () -> authService.changePassword("testuser", "oldpass123", "newpass1234", "000000", "127.0.0.1", "TestAgent"));
     }
 
     // ── Profile tests ────────────────────────────────────────

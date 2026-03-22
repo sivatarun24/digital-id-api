@@ -9,9 +9,6 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class ChangePasswordRequest {
+public class RequestPasswordChangeOtpRequest {
     private String oldPassword;
-    private String newPassword;
-    private String confirmNewPassword;
-    private String otp;
 }
