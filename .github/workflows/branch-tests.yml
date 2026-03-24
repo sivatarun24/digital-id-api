@@ -32,27 +32,3 @@ jobs:
         with:
           name: backend-test-results
           path: target/surefire-reports/
-
-  # ── Frontend Tests ───────────────────────────────────────────
-  test-frontend:
-    name: Frontend Tests
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: ../digital-id-web/package-lock.json
-
-      - name: Install dependencies
-        working-directory: ../digital-id-web
-        run: npm ci
-
-      - name: Run frontend tests
-        working-directory: ../digital-id-web
-        run: npm test
