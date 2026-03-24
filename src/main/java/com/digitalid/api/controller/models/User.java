@@ -50,7 +50,10 @@ public class User {
 
     @Column(nullable = false, length = 20)
     @Enumerated(EnumType.STRING)
-    private Role role; // USER, ADMIN
+    private Role role; // USER, ADMIN, INST_ADMIN
+
+    @Column(name = "institution_id")
+    private Long institutionId;
 
     @Column(name = "account_status", nullable = false, length = 20)
     @Enumerated(EnumType.STRING)

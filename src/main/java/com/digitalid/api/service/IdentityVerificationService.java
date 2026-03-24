@@ -7,6 +7,8 @@ import com.digitalid.api.controller.models.User;
 import com.digitalid.api.controller.models.VerificationStatus;
 import com.digitalid.api.repositroy.IdentityVerificationRepository;
 import com.digitalid.api.repositroy.UserRepository;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.Resource;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -50,10 +52,15 @@ public class IdentityVerificationService {
         IdentityVerification iv = latest.get();
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("status", iv.getStatus().name().toLowerCase());
+        result.put("id", iv.getId());
         result.put("idType", iv.getIdType());
         result.put("submittedAt", iv.getSubmittedAt().toLocalDate().toString());
         result.put("reviewedAt", iv.getReviewedAt() != null
                 ? iv.getReviewedAt().toLocalDate().toString() : null);
+        result.put("reviewerNotes", iv.getReviewerNotes());
+        result.put("hasFrontFile", iv.getFrontFilePath() != null);
+        result.put("hasBackFile", iv.getBackFilePath() != null);
+        result.put("hasSelfieFile", iv.getSelfieFilePath() != null);
         return result;
     }
 
@@ -98,14 +105,54 @@ public class IdentityVerificationService {
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("status", iv.getStatus().name().toLowerCase());
+        result.put("id", iv.getId());
         result.put("idType", iv.getIdType());
         result.put("submittedAt", iv.getSubmittedAt().toLocalDate().toString());
         result.put("reviewedAt", null);
+        result.put("reviewerNotes", null);
+        result.put("hasFrontFile", iv.getFrontFilePath() != null);
+        result.put("hasBackFile", iv.getBackFilePath() != null);
+        result.put("hasSelfieFile", iv.getSelfieFilePath() != null);
         return result;
     }
 
     public boolean isVerified(Long userId) {
         return repo.existsByUserIdAndStatus(userId, VerificationStatus.VERIFIED);
+    }
+
+    public Resource getVerificationFile(String username, String side) {
+        IdentityVerification iv = getLatestVerification(username);
+        String path = switch (side.toLowerCase()) {
+            case "front" -> iv.getFrontFilePath();
+            case "back" -> iv.getBackFilePath();
+            case "selfie" -> iv.getSelfieFilePath();
+            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid side. Use front, back, or selfie");
+        };
+        if (path == null || path.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "File not provided");
+        }
+        FileSystemResource resource = new FileSystemResource(path);
+        if (!resource.exists()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "File not found");
+        }
+        return resource;
+    }
+
+    public String getVerificationFileMimeType(String username, String side) {
+        IdentityVerification iv = getLatestVerification(username);
+        String path = switch (side.toLowerCase()) {
+            case "front" -> iv.getFrontFilePath();
+            case "back" -> iv.getBackFilePath();
+            case "selfie" -> iv.getSelfieFilePath();
+            default -> null;
+        };
+        if (path == null) return "application/octet-stream";
+        String lower = path.toLowerCase();
+        if (lower.endsWith(".pdf")) return "application/pdf";
+        if (lower.endsWith(".png")) return "image/png";
+        if (lower.endsWith(".gif")) return "image/gif";
+        if (lower.endsWith(".webp")) return "image/webp";
+        return "image/jpeg";
     }
 
     private String saveFile(Path dir, MultipartFile file) throws IOException {
@@ -125,5 +172,11 @@ public class IdentityVerificationService {
     private User getUser(String username) {
         return userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+    }
+
+    private IdentityVerification getLatestVerification(String username) {
+        User user = getUser(username);
+        return repo.findTopByUserIdOrderBySubmittedAtDesc(user.getId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Verification not found"));
     }
 }

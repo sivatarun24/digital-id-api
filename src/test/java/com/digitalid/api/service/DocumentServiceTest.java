@@ -322,7 +322,7 @@ class DocumentServiceTest {
     }
 
     @Test
-    void replaceDocument_resetsStatusToPending() throws IOException {
+    void replaceDocument_setsStatusToVerified() throws IOException {
         testDocument.setStatus(DocumentStatus.VERIFIED);
         MockMultipartFile newFile = new MockMultipartFile(
                 "file", "new.jpg", "image/jpeg", new byte[100]);
@@ -335,7 +335,7 @@ class DocumentServiceTest {
 
         documentService.replaceDocument("testuser", 10L, newFile);
 
-        assertEquals(DocumentStatus.PENDING, testDocument.getStatus());
+        assertEquals(DocumentStatus.VERIFIED, testDocument.getStatus());
     }
 
     @Test

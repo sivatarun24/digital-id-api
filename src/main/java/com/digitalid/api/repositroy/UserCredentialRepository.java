@@ -10,7 +10,9 @@ import java.util.Optional;
 
 @Repository
 public interface UserCredentialRepository extends JpaRepository<UserCredential, Long> {
+    List<UserCredential> findAllByOrderByStartedAtDesc();
     List<UserCredential> findByUserId(Long userId);
+    List<UserCredential> findByUserIdInOrderByStartedAtDesc(List<Long> userIds);
     Optional<UserCredential> findByUserIdAndCredentialType(Long userId, String credentialType);
     long countByUserIdAndStatus(Long userId, VerificationStatus status);
 }

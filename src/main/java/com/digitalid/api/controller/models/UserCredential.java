@@ -36,10 +36,15 @@ public class UserCredential {
     @Enumerated(EnumType.STRING)
     private VerificationStatus status;
 
-    @Column(nullable = false, updatable = false)
+    @Column(nullable = false)
     private LocalDateTime startedAt;
 
+    private LocalDateTime reviewedAt;
+
     private LocalDateTime verifiedAt;
+
+    @Column(length = 1000)
+    private String reviewerNotes;
 
     @PrePersist
     protected void onCreate() {

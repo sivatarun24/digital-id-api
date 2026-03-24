@@ -1,0 +1,58 @@
+name: Branch Tests
+
+on:
+  push:
+    branches-ignore: [main]
+  pull_request:
+    branches-ignore: [main]
+
+jobs:
+  # ── Backend Tests ────────────────────────────────────────────
+  test-backend:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Run backend tests
+        run: ./mvnw verify -B
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results
+          path: target/surefire-reports/
+
+  # ── Frontend Tests ───────────────────────────────────────────
+  test-frontend:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: ../digital-id-web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ../digital-id-web
+        run: npm ci
+
+      - name: Run frontend tests
+        working-directory: ../digital-id-web
+        run: npm test

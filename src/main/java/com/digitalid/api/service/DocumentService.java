@@ -77,6 +77,7 @@ public class DocumentService {
                 .user(user)
                 .documentType(documentType.trim())
                 .issuer(issuer != null && !issuer.isBlank() ? issuer.trim() : null)
+                .status(DocumentStatus.VERIFIED)
                 .originalFileName(file.getOriginalFilename())
                 .filePath(storedPath)
                 .fileSize(file.getSize())
@@ -87,8 +88,8 @@ public class DocumentService {
         doc = documentRepository.save(doc);
 
         notificationService.create(user.getId(), "verification",
-                "Document uploaded for review",
-                "Your " + documentType.replace("_", " ") + " has been submitted for verification.");
+                "Document uploaded",
+                "Your " + documentType.replace("_", " ") + " has been uploaded and is now available in your documents.");
         auditLogService.log(username, AuditAction.DOCUMENT_UPLOAD,
                 documentType + ": " + file.getOriginalFilename());
 
@@ -143,12 +144,12 @@ public class DocumentService {
         doc.setFilePath(newPath);
         doc.setFileSize(file.getSize());
         doc.setMimeType(mimeType);
-        doc.setStatus(DocumentStatus.PENDING);
+        doc.setStatus(DocumentStatus.VERIFIED);
         doc = documentRepository.save(doc);
 
         notificationService.create(user.getId(), "verification",
-                "Document updated for review",
-                "Your " + doc.getDocumentType().replace("_", " ") + " has been re-submitted for verification.");
+                "Document updated",
+                "Your " + doc.getDocumentType().replace("_", " ") + " has been updated in your documents.");
         auditLogService.log(username, AuditAction.DOCUMENT_UPLOAD,
                 doc.getDocumentType() + " (replaced): " + file.getOriginalFilename());
 

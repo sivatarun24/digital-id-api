@@ -28,8 +28,11 @@ public class CredentialController {
     @PostMapping("/{credentialType}/start")
     public ResponseEntity<Map<String, Object>> startVerification(
             Authentication auth,
-            @PathVariable String credentialType) {
-        return ResponseEntity.ok(credentialService.startVerification(auth.getName(), credentialType));
+            @PathVariable String credentialType,
+            @RequestParam Map<String, String> fields,
+            @RequestParam(value = "file", required = false) MultipartFile file) {
+        fields.remove("file");
+        return ResponseEntity.ok(credentialService.startVerification(auth.getName(), credentialType, fields, file));
     }
 
     @PostMapping(value = "/{credentialType}/submit", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

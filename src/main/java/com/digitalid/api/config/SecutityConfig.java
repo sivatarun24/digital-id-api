@@ -39,6 +39,8 @@ public class SecutityConfig {
                         .requestMatchers("/api/auth/**", "/api/public/**").permitAll()
                         .requestMatchers("/test/health", "/test/connectivity", "/test/smtp", "/test/email").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/info", "/actuator/prometheus", "/actuator/metrics").permitAll()
+                        .requestMatchers("/api/admin/**").hasAuthority("ADMIN")
+                        .requestMatchers("/api/inst-admin/**").hasAnyAuthority("ADMIN", "INST_ADMIN")
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(managementSecretFilter, org.springframework.security.web.context.SecurityContextPersistenceFilter.class)

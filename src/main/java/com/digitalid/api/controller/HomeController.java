@@ -8,6 +8,8 @@ import com.digitalid.api.repositroy.*;
 import com.digitalid.api.service.CredentialService;
 import com.digitalid.api.service.IdentityVerificationService;
 import com.digitalid.api.service.ServiceConnectionService;
+import com.digitalid.api.controller.models.Notification;
+import com.digitalid.api.controller.models.IdentityVerification;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -19,8 +21,8 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping(value = "/api/dashboard", produces = MediaType.APPLICATION_JSON_VALUE)
-public class DashboardController {
+@RequestMapping(value = "/api/home", produces = MediaType.APPLICATION_JSON_VALUE)
+public class HomeController {
 
     private final UserRepository userRepository;
     private final DocumentRepository documentRepository;
@@ -28,23 +30,32 @@ public class DashboardController {
     private final CredentialService credentialService;
     private final IdentityVerificationService identityVerificationService;
     private final AuditLogRepository auditLogRepository;
+    private final IdentityVerificationRepository identityVerificationRepository;
+    private final UserCredentialRepository userCredentialRepository;
+    private final NotificationRepository notificationRepository;
 
-    public DashboardController(UserRepository userRepository,
+    public HomeController(UserRepository userRepository,
                                 DocumentRepository documentRepository,
                                 ServiceConnectionService serviceConnectionService,
                                 CredentialService credentialService,
                                 IdentityVerificationService identityVerificationService,
-                                AuditLogRepository auditLogRepository) {
+                                AuditLogRepository auditLogRepository,
+                                IdentityVerificationRepository identityVerificationRepository,
+                                UserCredentialRepository userCredentialRepository,
+                                NotificationRepository notificationRepository) {
         this.userRepository = userRepository;
         this.documentRepository = documentRepository;
         this.serviceConnectionService = serviceConnectionService;
         this.credentialService = credentialService;
         this.identityVerificationService = identityVerificationService;
         this.auditLogRepository = auditLogRepository;
+        this.identityVerificationRepository = identityVerificationRepository;
+        this.userCredentialRepository = userCredentialRepository;
+        this.notificationRepository = notificationRepository;
     }
 
     @GetMapping
-    public ResponseEntity<Map<String, Object>> getDashboard(Authentication auth) {
+    public ResponseEntity<Map<String, Object>> getHome(Authentication auth) {
         User user = userRepository.findByUsername(auth.getName())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
 
@@ -52,6 +63,17 @@ public class DashboardController {
         long serviceCount = serviceConnectionService.countConnected(user.getId());
         long credCount    = credentialService.countVerified(user.getId());
         boolean identityVerified = identityVerificationService.isVerified(user.getId());
+        long pendingCredentials = userCredentialRepository.countByUserIdAndStatus(user.getId(), VerificationStatus.PENDING);
+        IdentityVerification latestVerification = identityVerificationRepository
+                .findTopByUserIdOrderBySubmittedAtDesc(user.getId())
+                .orElse(null);
+        boolean hasPendingIdentityVerification = latestVerification != null
+                && latestVerification.getStatus() == VerificationStatus.PENDING;
+        long unreadNotifications = notificationRepository
+                .findByUserIdOrderByCreatedAtDesc(user.getId())
+                .stream()
+                .filter(n -> !Boolean.TRUE.equals(n.isRead()))
+                .count();
 
         // Last 5 audit log entries
         List<AuditLog> recent = auditLogRepository.findByUsernameOrderByCreatedAtDesc(auth.getName());
@@ -60,11 +82,23 @@ public class DashboardController {
                 .map(this::activityToMap)
                 .collect(Collectors.toList());
 
+        List<Map<String, Object>> latestNotifications = notificationRepository
+                .findByUserIdOrderByCreatedAtDesc(user.getId())
+                .stream()
+                .limit(3)
+                .map(this::notificationToMap)
+                .collect(Collectors.toList());
+
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("docCount", docCount);
         result.put("serviceCount", serviceCount);
         result.put("credentialCount", credCount);
         result.put("identityVerified", identityVerified);
+        result.put("pendingCredentials", pendingCredentials);
+        result.put("hasPendingIdentityVerification", hasPendingIdentityVerification);
+        result.put("pendingVerifications", pendingCredentials + (hasPendingIdentityVerification ? 1 : 0));
+        result.put("unreadNotifications", unreadNotifications);
+        result.put("latestNotifications", latestNotifications);
         result.put("recentActivity", recentActivity);
         return ResponseEntity.ok(result);
     }
@@ -91,6 +125,17 @@ public class DashboardController {
         m.put("label", mapToTitle(log.getAction().name()));
         m.put("detail", log.getDetails() != null ? log.getDetails() : "");
         m.put("time", log.getCreatedAt().toString());
+        return m;
+    }
+
+    private Map<String, Object> notificationToMap(Notification notification) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", notification.getId());
+        m.put("type", notification.getType());
+        m.put("title", notification.getTitle());
+        m.put("message", notification.getMessage());
+        m.put("read", notification.isRead());
+        m.put("createdAt", notification.getCreatedAt() != null ? notification.getCreatedAt().toString() : null);
         return m;
     }
 
