@@ -91,6 +91,29 @@ public class AuthApiController {
         return ResponseEntity.ok(Map.of("message", "Logged out successfully"));
     }
 
+    @PostMapping(value = "/change-password/request-otp", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<Map<String, Object>> requestChangePasswordOtp(
+            Authentication authentication,
+            @RequestBody RequestPasswordChangeOtpRequest request,
+            HttpServletRequest httpRequest) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity
+                    .status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "Unauthenticated"));
+        }
+
+        if (request == null || request.getOldPassword() == null || request.getOldPassword().isBlank()) {
+            return ResponseEntity
+                    .status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", "Current password is required"));
+        }
+
+        Map<String, Object> response = authService.requestPasswordChangeOtp(
+                authentication.getName(), request.getOldPassword(),
+                getClientIp(httpRequest), httpRequest.getHeader("User-Agent"));
+        return ResponseEntity.ok(response);
+    }
+
     @PostMapping(value = "/change-password", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<Map<String, Object>> changePassword(
             Authentication authentication,
@@ -104,14 +127,22 @@ public class AuthApiController {
 
         if (request == null
                 || request.getOldPassword() == null || request.getOldPassword().isBlank()
-                || request.getNewPassword() == null || request.getNewPassword().isBlank()) {
+                || request.getNewPassword() == null || request.getNewPassword().isBlank()
+                || request.getConfirmNewPassword() == null || request.getConfirmNewPassword().isBlank()
+                || request.getOtp() == null || request.getOtp().isBlank()) {
             return ResponseEntity
                     .status(HttpStatus.BAD_REQUEST)
-                    .body(Map.of("error", "Old password and new password are required"));
+                    .body(Map.of("error", "Current password, new password, confirm password, and verification code are required"));
+        }
+
+        if (!request.getNewPassword().equals(request.getConfirmNewPassword())) {
+            return ResponseEntity
+                    .status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", "New password and confirm password must match"));
         }
 
         Map<String, Object> response = authService.changePassword(
-                authentication.getName(), request.getOldPassword(), request.getNewPassword(),
+                authentication.getName(), request.getOldPassword(), request.getNewPassword(), request.getOtp(),
                 getClientIp(httpRequest), httpRequest.getHeader("User-Agent"));
         return ResponseEntity.ok(response);
     }

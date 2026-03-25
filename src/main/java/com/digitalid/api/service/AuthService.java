@@ -17,11 +17,15 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
+import java.security.SecureRandom;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 @Service
 public class AuthService {
 
     private static final Logger log = LoggerFactory.getLogger(AuthService.class);
+    private static final int PASSWORD_CHANGE_OTP_EXPIRY_MINUTES = 10;
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -29,6 +33,8 @@ public class AuthService {
     private final EmailService emailService;
     private final AuditLogService auditLogService;
     private final ApiMetrics metrics;
+    private final SecureRandom secureRandom = new SecureRandom();
+    private final ConcurrentMap<String, PasswordChangeOtpChallenge> passwordChangeOtps = new ConcurrentHashMap<>();
 
     @Value("${app.frontend.url}")
     private String frontendUrl;
@@ -337,7 +343,39 @@ public class AuthService {
         return response;
     }
 
-    public Map<String, Object> changePassword(String username, String oldPassword, String newPassword,
+    public Map<String, Object> requestPasswordChangeOtp(String username, String oldPassword,
+                                                        String ipAddress, String userAgent) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+
+        if (!passwordEncoder.matches(oldPassword, user.getPasswordHash())) {
+            metrics.recordPasswordChangeFailure();
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Current password is incorrect");
+        }
+
+        String otp = generateSixDigitOtp();
+        passwordChangeOtps.put(username, new PasswordChangeOtpChallenge(otp,
+                LocalDateTime.now().plusMinutes(PASSWORD_CHANGE_OTP_EXPIRY_MINUTES)));
+
+        auditLogService.log(username, AuditAction.PASSWORD_CHANGE,
+                "Password change OTP requested", ipAddress, userAgent);
+
+        try {
+            emailService.sendPasswordChangeOtpEmail(user.getEmail(), user.getUsername(), otp);
+        } catch (Exception e) {
+            passwordChangeOtps.remove(username);
+            log.warn("Failed to send password change OTP to {}: {}", user.getEmail(), e.getMessage());
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Failed to send verification code. Please try again.");
+        }
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("message", "A verification code has been sent to your email address.");
+        response.put("email", user.getEmail());
+        return response;
+    }
+
+    public Map<String, Object> changePassword(String username, String oldPassword, String newPassword, String otp,
                                                String ipAddress, String userAgent) {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
@@ -357,9 +395,27 @@ public class AuthService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "New password must be at least 8 characters");
         }
 
+        PasswordChangeOtpChallenge challenge = passwordChangeOtps.get(username);
+        if (challenge == null) {
+            metrics.recordPasswordChangeFailure();
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Request a verification code before changing your password");
+        }
+
+        if (challenge.expiresAt().isBefore(LocalDateTime.now())) {
+            passwordChangeOtps.remove(username);
+            metrics.recordPasswordChangeFailure();
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Verification code has expired. Please request a new one.");
+        }
+
+        if (!challenge.code().equals(otp)) {
+            metrics.recordPasswordChangeFailure();
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid verification code");
+        }
+
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         user.setPasswordUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
+        passwordChangeOtps.remove(username);
 
         metrics.recordPasswordChangeSuccess();
         auditLogService.log(username, AuditAction.PASSWORD_CHANGE,
@@ -530,4 +586,10 @@ public class AuthService {
         userInfo.put("twoFactorEnabled", Boolean.TRUE.equals(user.getTwoFactorEnabled()));
         return userInfo;
     }
+
+    private String generateSixDigitOtp() {
+        return String.format("%06d", secureRandom.nextInt(1_000_000));
+    }
+
+    private record PasswordChangeOtpChallenge(String code, LocalDateTime expiresAt) {}
 }
