@@ -41,6 +41,9 @@ public class IdentityVerification {
 
     private LocalDateTime reviewedAt;
 
+    @Column(length = 1000)
+    private String reviewerNotes;
+
     @PrePersist
     protected void onCreate() {
         this.submittedAt = LocalDateTime.now();

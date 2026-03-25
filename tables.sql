@@ -42,3 +42,91 @@ CREATE TABLE audit_logs (
     INDEX idx_audit_action (action),
     INDEX idx_audit_created (created_at)
 );
+
+CREATE TABLE user_credentials (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    user_id BIGINT NOT NULL,
+    credential_type VARCHAR(30) NOT NULL,
+    status VARCHAR(20) NOT NULL,
+    started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    reviewed_at TIMESTAMP NULL,
+    verified_at TIMESTAMP NULL,
+    reviewer_notes VARCHAR(1000) NULL,
+    UNIQUE KEY uk_user_credential_type (user_id, credential_type),
+    INDEX idx_cred_user_id (user_id),
+    INDEX idx_cred_user_status (user_id, status)
+);
+
+CREATE TABLE military_credential_details (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    user_credential_id BIGINT NOT NULL UNIQUE,
+    branch VARCHAR(100),
+    rank VARCHAR(100),
+    service_start_date DATE,
+    currently_serving BOOLEAN,
+    service_end_date DATE,
+    discharge_type VARCHAR(150)
+);
+
+CREATE TABLE student_credential_details (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    user_credential_id BIGINT NOT NULL UNIQUE,
+    school_name VARCHAR(255),
+    enrollment_status VARCHAR(100),
+    major VARCHAR(255),
+    student_id VARCHAR(100),
+    graduation_date VARCHAR(20)
+);
+
+CREATE TABLE first_responder_credential_details (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    user_credential_id BIGINT NOT NULL UNIQUE,
+    agency_name VARCHAR(255),
+    role VARCHAR(150),
+    badge_number VARCHAR(100),
+    employment_start_date DATE
+);
+
+CREATE TABLE teacher_credential_details (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    user_credential_id BIGINT NOT NULL UNIQUE,
+    school_name VARCHAR(255),
+    teaching_level VARCHAR(150),
+    subject VARCHAR(255),
+    employee_id VARCHAR(100),
+    employment_start_date DATE
+);
+
+CREATE TABLE healthcare_credential_details (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    user_credential_id BIGINT NOT NULL UNIQUE,
+    license_type VARCHAR(150),
+    license_number VARCHAR(100),
+    issuing_state VARCHAR(100),
+    employer VARCHAR(255)
+);
+
+CREATE TABLE government_credential_details (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    user_credential_id BIGINT NOT NULL UNIQUE,
+    agency_name VARCHAR(255),
+    position VARCHAR(150),
+    level VARCHAR(100),
+    employee_id VARCHAR(100)
+);
+
+CREATE TABLE senior_credential_details (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    user_credential_id BIGINT NOT NULL UNIQUE,
+    date_of_birth DATE
+);
+
+CREATE TABLE nonprofit_credential_details (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    user_credential_id BIGINT NOT NULL UNIQUE,
+    org_name VARCHAR(255),
+    ein VARCHAR(100),
+    position VARCHAR(150),
+    org_type VARCHAR(150),
+    employment_start_date DATE
+);

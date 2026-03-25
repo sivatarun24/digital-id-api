@@ -1,6 +1,8 @@
 package com.digitalid.api.controller;
 
 import com.digitalid.api.service.IdentityVerificationService;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -36,5 +38,17 @@ public class IdentityVerificationController {
         Map<String, Object> result = identityVerificationService.submit(
                 auth.getName(), idType, frontFile, backFile, selfieFile);
         return ResponseEntity.ok(result);
+    }
+
+    @GetMapping(value = "/files/{side}", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
+    public ResponseEntity<Resource> getFile(
+            Authentication auth,
+            @PathVariable String side) {
+        Resource resource = identityVerificationService.getVerificationFile(auth.getName(), side);
+        String mimeType = identityVerificationService.getVerificationFileMimeType(auth.getName(), side);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(mimeType != null ? mimeType : "application/octet-stream"))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline")
+                .body(resource);
     }
 }

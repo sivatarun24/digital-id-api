@@ -13,6 +13,8 @@ import org.springframework.security.web.authentication.WebAuthenticationDetailsS
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+
 import java.io.IOException;
 import java.util.List;
 
@@ -57,11 +59,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             userRepository.findByUsername(username).ifPresent(user -> {
                 if (jwtService.isTokenValid(token, user.getUsername())) {
+                    List<SimpleGrantedAuthority> authorities = user.getRole() != null
+                            ? List.of(new SimpleGrantedAuthority(user.getRole().name()))
+                            : List.of();
                     UsernamePasswordAuthenticationToken auth =
                             new UsernamePasswordAuthenticationToken(
                                     user.getUsername(),
                                     null,
-                                    List.of());
+                                    authorities);
 
                     auth.setDetails(
                             new WebAuthenticationDetailsSource().buildDetails(request)
