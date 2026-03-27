@@ -130,3 +130,31 @@ CREATE TABLE nonprofit_credential_details (
     org_type VARCHAR(150),
     employment_start_date DATE
 );
+
+CREATE TABLE IF NOT EXISTS developer_apps (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(100) NOT NULL,
+    website VARCHAR(255),
+    description VARCHAR(500),
+    callback_url VARCHAR(500),
+    allowed_credential_types TEXT,
+    api_key_hash VARCHAR(255) NOT NULL,
+    api_key_prefix VARCHAR(15) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+    owner_email VARCHAR(100) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_app_prefix (api_key_prefix)
+);
+
+CREATE TABLE IF NOT EXISTS verification_grants (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    user_id BIGINT NOT NULL,
+    app_id BIGINT NOT NULL,
+    credential_type VARCHAR(30) NOT NULL,
+    token VARCHAR(100) NOT NULL UNIQUE,
+    expires_at TIMESTAMP NOT NULL,
+    used BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_grant_token (token),
+    INDEX idx_grant_user (user_id)
+);

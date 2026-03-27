@@ -23,6 +23,7 @@ public class SecutityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final ManagementSecretFilter managementSecretFilter;
+    private final ApiKeyFilter apiKeyFilter;
 
     @Value("${app.frontend.url:}")
     private String frontendUrl;
@@ -37,6 +38,11 @@ public class SecutityConfig {
                         )
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**", "/api/public/**").permitAll()
+                        .requestMatchers("/api/developers/register").permitAll()
+                        .requestMatchers("/api/developers/me").permitAll()  // API key auth handled by ApiKeyFilter
+                        .requestMatchers("/api/developers/me/regenerate-key").permitAll()  // API key auth
+                        .requestMatchers("/api/verify").permitAll()  // API key auth handled by ApiKeyFilter
+                        .requestMatchers("/api/consent/request").permitAll()  // public app info, no PII
                         .requestMatchers("/test/health", "/test/connectivity", "/test/smtp", "/test/email").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/info", "/actuator/prometheus", "/actuator/metrics").permitAll()
                         .requestMatchers("/api/admin/**").hasAuthority("ADMIN")
@@ -44,6 +50,7 @@ public class SecutityConfig {
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(managementSecretFilter, org.springframework.security.web.context.SecurityContextPersistenceFilter.class)
+                .addFilterBefore(apiKeyFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
         ;
 

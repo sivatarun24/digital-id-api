@@ -1,6 +1,7 @@
 package com.digitalid.api.controller;
 
 import com.digitalid.api.service.AdminService;
+import com.digitalid.api.service.DeveloperAppService;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -16,9 +17,11 @@ import java.util.Map;
 public class AdminController {
 
     private final AdminService adminService;
+    private final DeveloperAppService developerAppService;
 
-    public AdminController(AdminService adminService) {
+    public AdminController(AdminService adminService, DeveloperAppService developerAppService) {
         this.adminService = adminService;
+        this.developerAppService = developerAppService;
     }
 
     // ── Stats ────────────────────────────────────────────────────────────────
@@ -273,5 +276,22 @@ public class AdminController {
     @GetMapping("/institutions/{id}/members")
     public ResponseEntity<List<Map<String, Object>>> getInstitutionMembers(@PathVariable Long id) {
         return ResponseEntity.ok(adminService.getInstitutionMembers(id));
+    }
+
+    // ── Developer App Oversight ───────────────────────────────────────────────
+
+    @GetMapping("/apps")
+    public ResponseEntity<List<Map<String, Object>>> listApps() {
+        return ResponseEntity.ok(developerAppService.listAll());
+    }
+
+    @PutMapping("/apps/{id}/suspend")
+    public ResponseEntity<Map<String, Object>> suspendApp(@PathVariable Long id) {
+        return ResponseEntity.ok(developerAppService.setStatus(id, "SUSPENDED"));
+    }
+
+    @PutMapping("/apps/{id}/reinstate")
+    public ResponseEntity<Map<String, Object>> reinstateApp(@PathVariable Long id) {
+        return ResponseEntity.ok(developerAppService.setStatus(id, "ACTIVE"));
     }
 }
