@@ -39,10 +39,26 @@ public class CredentialController {
     public ResponseEntity<Map<String, Object>> submitDocument(
             Authentication auth,
             @PathVariable String credentialType,
-            @RequestParam("file") MultipartFile file) {
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "verificationEmail", required = false) String verificationEmail) {
         if (auth == null || !auth.isAuthenticated()) {
             return ResponseEntity.status(401).body(Map.of("error", "Unauthenticated"));
         }
-        return ResponseEntity.ok(credentialService.submitDocument(auth.getName(), credentialType, file));
+        return ResponseEntity.ok(credentialService.submitDocument(auth.getName(), credentialType, file, verificationEmail));
+    }
+
+    @PostMapping("/{credentialType}/request-email-verification")
+    public ResponseEntity<Map<String, Object>> requestEmailVerification(
+            Authentication auth,
+            @PathVariable String credentialType,
+            @RequestBody Map<String, String> body) {
+        String email = body.get("email");
+        return ResponseEntity.ok(credentialService.requestEmailVerification(auth.getName(), credentialType, email));
+    }
+
+    @PostMapping("/verify-email")
+    public ResponseEntity<Map<String, Object>> verifyEmailToken(@RequestBody Map<String, String> body) {
+        String token = body.get("token");
+        return ResponseEntity.ok(credentialService.verifyEmailToken(token));
     }
 }

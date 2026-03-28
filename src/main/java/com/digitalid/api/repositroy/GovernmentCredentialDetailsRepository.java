@@ -7,4 +7,5 @@ import java.util.Optional;
 
 public interface GovernmentCredentialDetailsRepository extends JpaRepository<GovernmentCredentialDetails, Long> {
     Optional<GovernmentCredentialDetails> findByUserCredentialId(Long userCredentialId);
+    void deleteByUserCredentialId(Long userCredentialId);
 }

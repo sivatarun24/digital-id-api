@@ -46,6 +46,12 @@ public class UserCredential {
     @Column(length = 1000)
     private String reviewerNotes;
 
+    @Column(name = "verification_email", length = 100)
+    private String verificationEmail;
+
+    @Column(name = "verification_token", length = 100)
+    private String verificationToken;
+
     @PrePersist
     protected void onCreate() {
         this.startedAt = LocalDateTime.now();

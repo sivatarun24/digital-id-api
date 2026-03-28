@@ -62,6 +62,14 @@ public class InfoRequestService {
         infoRequestRepository.delete(req);
     }
 
+    public void deleteByUserId(Long userId) {
+        List<InfoRequest> requests = infoRequestRepository.findByUserIdOrderByRequestedAtDesc(userId);
+        for (InfoRequest req : requests) {
+            deleteResponseFiles(req);
+            infoRequestRepository.delete(req);
+        }
+    }
+
     public List<Map<String, Object>> getPendingRequestsForUser(String username) {
         return userRepository.findByUsername(username).map(user ->
             infoRequestRepository.findByUserIdAndResolvedFalseOrderByRequestedAtDesc(user.getId())

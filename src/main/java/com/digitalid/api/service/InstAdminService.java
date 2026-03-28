@@ -236,9 +236,7 @@ public class InstAdminService {
         }
         v.setStatus(newStatus);
         v.setReviewedAt(LocalDateTime.now());
-        if (notes != null && !notes.isBlank()) {
-            v.setReviewerNotes(notes.trim());
-        }
+        v.setReviewerNotes(notes != null && !notes.isBlank() ? notes.trim() : null);
         verificationRepository.save(v);
 
         // Notify user

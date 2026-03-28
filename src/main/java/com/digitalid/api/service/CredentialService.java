@@ -4,19 +4,29 @@ import com.digitalid.api.audit.AuditAction;
 import com.digitalid.api.audit.AuditLogService;
 import com.digitalid.api.controller.models.*;
 import com.digitalid.api.repositroy.*;
+import com.digitalid.api.service.ocr.CredentialAnalyzer;
+import com.digitalid.api.service.ocr.OcrResult;
+import com.digitalid.api.service.ocr.OcrService;
 import com.digitalid.api.service.storage.StorageService;
+import org.springframework.core.io.Resource;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
+@Transactional
 public class CredentialService {
 
     private static final Set<String> AVAILABLE_TYPES = Set.of(
@@ -43,6 +53,9 @@ public class CredentialService {
     private final StorageService storageService;
     private final NotificationService notificationService;
     private final AuditLogService auditLogService;
+    private final VerificationAutomationService automationService;
+    private final OcrService ocrService;
+    private final CredentialAnalyzer credentialAnalyzer;
 
     public CredentialService(UserCredentialRepository credentialRepository,
                               UserRepository userRepository,
@@ -50,15 +63,18 @@ public class CredentialService {
                               DocumentRepository documentRepository,
                               MilitaryCredentialDetailsRepository militaryDetailsRepository,
                               StudentCredentialDetailsRepository studentDetailsRepository,
-                              FirstResponderCredentialDetailsRepository firstResponderDetailsRepository,
-                              TeacherCredentialDetailsRepository teacherDetailsRepository,
-                              HealthcareCredentialDetailsRepository healthcareDetailsRepository,
-                              GovernmentCredentialDetailsRepository governmentDetailsRepository,
-                              SeniorCredentialDetailsRepository seniorDetailsRepository,
-                              NonprofitCredentialDetailsRepository nonprofitDetailsRepository,
-                              StorageService storageService,
-                              NotificationService notificationService,
-                              AuditLogService auditLogService) {
+                             FirstResponderCredentialDetailsRepository firstResponderDetailsRepository,
+                             TeacherCredentialDetailsRepository teacherDetailsRepository,
+                             HealthcareCredentialDetailsRepository healthcareDetailsRepository,
+                             GovernmentCredentialDetailsRepository governmentDetailsRepository,
+                             SeniorCredentialDetailsRepository seniorDetailsRepository,
+                             NonprofitCredentialDetailsRepository nonprofitDetailsRepository,
+                             StorageService storageService,
+                             NotificationService notificationService,
+                             AuditLogService auditLogService,
+                             VerificationAutomationService automationService,
+                             OcrService ocrService,
+                             CredentialAnalyzer credentialAnalyzer) {
         this.credentialRepository = credentialRepository;
         this.userRepository = userRepository;
         this.identityVerificationRepository = identityVerificationRepository;
@@ -74,6 +90,9 @@ public class CredentialService {
         this.storageService = storageService;
         this.notificationService = notificationService;
         this.auditLogService = auditLogService;
+        this.automationService = automationService;
+        this.ocrService = ocrService;
+        this.credentialAnalyzer = credentialAnalyzer;
     }
 
     public List<Map<String, Object>> getCredentials(String username) {
@@ -132,7 +151,41 @@ public class CredentialService {
         return toMap(cred);
     }
 
-    public Map<String, Object> submitDocument(String username, String credentialType, MultipartFile file) {
+    @jakarta.transaction.Transactional
+    public void deleteCredential(Long id) {
+        UserCredential cred = credentialRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Credential not found"));
+
+        // 1. Delete category-specific details
+        switch (cred.getCredentialType()) {
+            case "military" -> militaryDetailsRepository.deleteByUserCredentialId(cred.getId());
+            case "student" -> studentDetailsRepository.deleteByUserCredentialId(cred.getId());
+            case "first_responder" -> firstResponderDetailsRepository.deleteByUserCredentialId(cred.getId());
+            case "teacher" -> teacherDetailsRepository.deleteByUserCredentialId(cred.getId());
+            case "healthcare" -> healthcareDetailsRepository.deleteByUserCredentialId(cred.getId());
+            case "government" -> governmentDetailsRepository.deleteByUserCredentialId(cred.getId());
+            case "senior" -> seniorDetailsRepository.deleteByUserCredentialId(cred.getId());
+            case "nonprofit" -> nonprofitDetailsRepository.deleteByUserCredentialId(cred.getId());
+        }
+
+        // 2. Delete associated documents and files
+        documentRepository.findTopByUser_IdAndDocumentTypeOrderByUploadedAtDesc(cred.getUserId(), cred.getCredentialType())
+                .ifPresent(doc -> {
+                    storageService.delete(doc.getFilePath());
+                    documentRepository.delete(doc);
+                });
+
+        // 3. Delete the credential itself
+        credentialRepository.delete(cred);
+
+        // 4. Audit
+        userRepository.findById(cred.getUserId()).ifPresent(u -> {
+            auditLogService.log(u.getUsername(), AuditAction.DOCUMENT_DELETE,
+                    "Deleted credential " + cred.getCredentialType() + " (ID: " + id + ")");
+        });
+    }
+
+    public Map<String, Object> submitDocument(String username, String credentialType, MultipartFile file, String verificationEmail) {
         if (file == null || file.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Supporting document is required");
         }
@@ -155,16 +208,205 @@ public class CredentialService {
 
         upsertSupportingDocument(user, credentialType, file);
 
+        // --- NEW: Sequential Verification Flow ---
+        if (verificationEmail != null && !verificationEmail.isBlank()) {
+            // Professional Account: Phase 1 is Email Verification
+            String token = automationService.generateToken();
+            cred.setVerificationEmail(verificationEmail);
+            cred.setVerificationToken(token);
+            cred.setStatus(VerificationStatus.PENDING);
+            credentialRepository.save(cred);
+            
+            automationService.sendVerificationEmail(verificationEmail, user.getUsername(), credentialType, token);
+            auditLogService.log(username, AuditAction.CREDENTIAL_VERIFY_STARTED,
+                    credentialType + " sequential-verify started: email sent to " + verificationEmail);
+            
+            return Map.of(
+                "message", "Document received! Please check your official email (" + verificationEmail + ") to verify your affiliation. Document analysis will begin after email confirmation.",
+                "credential", toMap(cred),
+                "autoVerified", false
+            );
+        }
+
+        // --- No Email Provided (e.g. Senior): Immediate AI OCR ---
+        credentialRepository.save(cred);
+        OcrResult ocrResult = ocrService.extractText(file);
+        
+        if (ocrResult.isSuccess()) {
+            CredentialAnalyzer.AnalyzeResult analyzeResult = 
+                    credentialAnalyzer.analyze(ocrResult.getRawText(), user.getName(), credentialType);
+            
+            if (analyzeResult.isMatch()) {
+                cred.setStatus(VerificationStatus.VERIFIED);
+                cred.setVerifiedAt(LocalDateTime.now());
+                credentialRepository.save(cred);
+
+                // Sync Document Status
+                documentRepository.findTopByUser_IdAndDocumentTypeOrderByUploadedAtDesc(user.getId(), credentialType)
+                        .ifPresent(doc -> {
+                            doc.setStatus(DocumentStatus.VERIFIED);
+                            documentRepository.save(doc);
+                        });
+                
+                notificationService.create(user.getId(), "verification",
+                        "Credential Auto-Verified!",
+                        "System analysis confirmed your " + capitalize(credentialType.replace("_", " ")) + " status.");
+                
+                auditLogService.log(username, AuditAction.CREDENTIAL_VERIFY_SUCCESS,
+                        credentialType + " auto-verified via document analysis (No email path)");
+                
+                return Map.of(
+                    "message", "Document analysis complete. Your credential has been automatically verified!",
+                    "credential", toMap(cred),
+                    "autoVerified", true
+                );
+            } else {
+                cred.setStatus(VerificationStatus.REJECTED);
+                cred.setReviewerNotes("Verification Failed: " + analyzeResult.message());
+                credentialRepository.save(cred);
+
+                // Sync Document Status
+                documentRepository.findTopByUser_IdAndDocumentTypeOrderByUploadedAtDesc(user.getId(), credentialType)
+                        .ifPresent(doc -> {
+                            doc.setStatus(DocumentStatus.REJECTED);
+                            documentRepository.save(doc);
+                        });
+
+                auditLogService.log(username, AuditAction.CREDENTIAL_VERIFY_FAILED,
+                        credentialType + " document mismatch: " + analyzeResult.message());
+
+                return Map.of(
+                    "message", "Document analysis complete. Verification failed: " + analyzeResult.message(),
+                    "credential", toMap(cred),
+                    "autoVerified", true
+                );
+            }
+        }
+
         notificationService.create(user.getId(), "verification",
                 "Supporting document received",
-                capitalize(credentialType.replace("_", " ")) + " supporting document submitted and under review.");
+                capitalize(credentialType.replace("_", " ")) + " document submitted and under review.");
+        
         auditLogService.log(username, AuditAction.CREDENTIAL_VERIFY_STARTED,
                 credentialType + " document submitted");
 
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("message", "Document submitted successfully. Your credential is under review.");
+        result.put("message", "Document submitted successfully. " + 
+                (verificationEmail != null ? "Please check your email to complete verification." : "Our team will review it shortly."));
         result.put("credential", toMap(cred));
+        result.put("autoVerified", false);
         return result;
+    }
+
+    public Map<String, Object> requestEmailVerification(String username, String credentialType, String email) {
+        if (email == null || email.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email is required");
+        }
+
+        if (!automationService.isEligibleForInstantVerify(email, credentialType)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
+                    "This email domain is not eligible for instant verification for " + credentialType);
+        }
+
+        User user = getUser(username);
+        UserCredential cred = credentialRepository.findByUserIdAndCredentialType(user.getId(), credentialType)
+                .orElse(UserCredential.builder()
+                        .userId(user.getId())
+                        .credentialType(credentialType)
+                        .status(VerificationStatus.PENDING)
+                        .build());
+
+        if (cred.getStatus() == VerificationStatus.VERIFIED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Credential already verified");
+        }
+
+        String token = automationService.generateToken();
+        cred.setVerificationEmail(email);
+        cred.setVerificationToken(token);
+        cred.setStatus(VerificationStatus.PENDING);
+        credentialRepository.save(cred);
+
+        automationService.sendVerificationEmail(email, user.getUsername(), credentialType, token);
+        auditLogService.log(username, AuditAction.CREDENTIAL_VERIFY_STARTED, 
+                credentialType + " email verification requested: " + email);
+
+        return Map.of("message", "Verification email sent to " + email);
+    }
+
+    public Map<String, Object> verifyEmailToken(String token) {
+        if (token == null || token.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Token is required");
+        }
+
+        UserCredential cred = credentialRepository.findByVerificationToken(token)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invalid or expired token"));
+
+        User user = userRepository.findById(cred.getUserId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+
+        cred.setVerifiedAt(LocalDateTime.now());
+        cred.setVerificationToken(null); // Clear token
+        // Keep status as PENDING - it will transition to VERIFIED after document analysis
+        credentialRepository.save(cred);
+
+        // --- NEW: Trigger AI OCR Analysis AFTER Email Verification ---
+        documentRepository.findTopByUser_IdAndDocumentTypeOrderByUploadedAtDesc(user.getId(), cred.getCredentialType())
+                .ifPresent(doc -> {
+                    // We have a document, let's run AI analysis
+                    try {
+                        Resource resource = storageService.load(doc.getFilePath());
+                        File tempFile = Files.createTempFile("ocr_deferred_", "_" + doc.getOriginalFileName()).toFile();
+                        
+                        try (InputStream is = resource.getInputStream()) {
+                            Files.copy(is, tempFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                        }
+                        
+                        // Use the File-based OCR method
+                        OcrResult ocrResult = ocrService.extractText(tempFile);
+                        Files.deleteIfExists(tempFile.toPath());
+                        
+                        if (ocrResult.isSuccess()) {
+                            CredentialAnalyzer.AnalyzeResult analyzeResult = 
+                                    credentialAnalyzer.analyze(ocrResult.getRawText(), user.getName(), cred.getCredentialType());
+                            
+                            if (analyzeResult.isMatch()) {
+                                cred.setStatus(VerificationStatus.VERIFIED);
+                                cred.setReviewedAt(LocalDateTime.now());
+                                credentialRepository.save(cred);
+
+                                // Sync Document Status
+                                doc.setStatus(DocumentStatus.VERIFIED);
+                                documentRepository.save(doc);
+                                
+                                auditLogService.log(user.getUsername(), AuditAction.CREDENTIAL_VERIFY_SUCCESS, 
+                                        cred.getCredentialType() + " confirmed via document analysis after email verification.");
+                            } else {
+                                // Email verified but validation FAILS!
+                                cred.setStatus(VerificationStatus.REJECTED);
+                                cred.setReviewerNotes("Email verified, but document validation failed: " + analyzeResult.message());
+                                cred.setReviewedAt(LocalDateTime.now());
+                                credentialRepository.save(cred);
+
+                                // Sync Document Status
+                                doc.setStatus(DocumentStatus.REJECTED);
+                                documentRepository.save(doc);
+                                
+                                auditLogService.log(user.getUsername(), AuditAction.CREDENTIAL_VERIFY_FAILED, 
+                                        cred.getCredentialType() + " email verified but validation failed: " + analyzeResult.message());
+                            }
+                        }
+                    } catch (Exception e) {
+                        // Fallback to manual review if validation fails or error occurs
+                        auditLogService.log(user.getUsername(), AuditAction.CREDENTIAL_VERIFY_STARTED, 
+                                "System Analysis skipped or failed after email verification for " + cred.getCredentialType());
+                    }
+                });
+
+        notificationService.create(user.getId(), "verification",
+                "Credential Email Verified!",
+                capitalize(cred.getCredentialType().replace("_", " ")) + " email confirmed. Finalizing status...");
+        
+        return Map.of("message", "Email verified successfully. Status updated based on dual-check.", "credentialType", cred.getCredentialType());
     }
 
     public long countVerified(Long userId) {

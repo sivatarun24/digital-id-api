@@ -61,6 +61,11 @@ public class NotificationService {
         notificationRepository.save(n);
     }
 
+    public void deleteByUserId(Long userId) {
+        List<Notification> list = notificationRepository.findByUserIdOrderByCreatedAtDesc(userId);
+        notificationRepository.deleteAll(list);
+    }
+
     private Map<String, Object> toMap(Notification n) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("id", n.getId());

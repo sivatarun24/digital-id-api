@@ -7,4 +7,5 @@ import java.util.Optional;
 
 public interface TeacherCredentialDetailsRepository extends JpaRepository<TeacherCredentialDetails, Long> {
     Optional<TeacherCredentialDetails> findByUserCredentialId(Long userCredentialId);
+    void deleteByUserCredentialId(Long userCredentialId);
 }

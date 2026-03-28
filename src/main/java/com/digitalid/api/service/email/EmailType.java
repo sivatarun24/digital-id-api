@@ -4,5 +4,6 @@ public enum EmailType {
     AUTH,
     MARKETING,
     PERSONAL,
-    DEVELOPER
+    DEVELOPER,
+    CREDENTIAL
 }

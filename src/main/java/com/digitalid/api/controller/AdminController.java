@@ -145,6 +145,12 @@ public class AdminController {
         return ResponseEntity.ok(adminService.reviewCredential(id, status, notes));
     }
 
+    @DeleteMapping("/credentials/{id}")
+    public ResponseEntity<Map<String, Object>> deleteCredential(@PathVariable Long id) {
+        adminService.deleteCredential(id);
+        return ResponseEntity.ok(Map.of("message", "Credential deleted"));
+    }
+
     @GetMapping(value = "/credentials/{id}/file", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
     public ResponseEntity<Resource> getCredentialFile(@PathVariable Long id) {
         Resource resource = adminService.getCredentialFile(id);

@@ -7,14 +7,19 @@ import com.digitalid.api.controller.models.User;
 import com.digitalid.api.controller.models.VerificationStatus;
 import com.digitalid.api.repositroy.IdentityVerificationRepository;
 import com.digitalid.api.repositroy.UserRepository;
+import com.digitalid.api.service.ocr.CredentialAnalyzer;
+import com.digitalid.api.service.ocr.FaceMatchingService;
+import com.digitalid.api.service.ocr.OcrResult;
+import com.digitalid.api.service.ocr.OcrService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -29,6 +34,9 @@ public class IdentityVerificationService {
     private final UserRepository userRepository;
     private final NotificationService notificationService;
     private final AuditLogService auditLogService;
+    private final OcrService ocrService;
+    private final CredentialAnalyzer credentialAnalyzer;
+    private final FaceMatchingService faceMatchingService;
 
     @Value("${app.uploads.dir:uploads}")
     private String uploadsDir;
@@ -36,11 +44,17 @@ public class IdentityVerificationService {
     public IdentityVerificationService(IdentityVerificationRepository repo,
                                         UserRepository userRepository,
                                         NotificationService notificationService,
-                                        AuditLogService auditLogService) {
+                                        AuditLogService auditLogService,
+                                        OcrService ocrService,
+                                        CredentialAnalyzer credentialAnalyzer,
+                                        FaceMatchingService faceMatchingService) {
         this.repo = repo;
         this.userRepository = userRepository;
         this.notificationService = notificationService;
         this.auditLogService = auditLogService;
+        this.ocrService = ocrService;
+        this.credentialAnalyzer = credentialAnalyzer;
+        this.faceMatchingService = faceMatchingService;
     }
 
     public Map<String, Object> getStatus(String username) {
@@ -57,7 +71,13 @@ public class IdentityVerificationService {
         result.put("submittedAt", iv.getSubmittedAt().toLocalDate().toString());
         result.put("reviewedAt", iv.getReviewedAt() != null
                 ? iv.getReviewedAt().toLocalDate().toString() : null);
-        result.put("reviewerNotes", iv.getReviewerNotes());
+        String notes = iv.getReviewerNotes();
+        if (notes != null) {
+            // Remove legacy or AI generated prefixes (AI, Automated system, Check Failed, etc.)
+            // Using a more aggressive regex to catch any variation
+            notes = notes.replaceAll("(?i)^(AI|Automated system|Check Failed|Verification Failed):\\s*", "");
+        }
+        result.put("reviewerNotes", notes);
         result.put("hasFrontFile", iv.getFrontFilePath() != null);
         result.put("hasBackFile", iv.getBackFilePath() != null);
         result.put("hasSelfieFile", iv.getSelfieFilePath() != null);
@@ -98,18 +118,89 @@ public class IdentityVerificationService {
 
         iv = repo.save(iv);
 
-        notificationService.create(user.getId(), "verification",
-                "Identity verification submitted",
-                "Your identity documents have been received and are under review. You'll be notified once the review is complete.");
-        auditLogService.log(username, AuditAction.IDENTITY_VERIFY_SUBMITTED, idType);
+        // --- Automated System Verification Analysis ---
+        // To match the user's requirement for a real-time "pending" status,
+        // we simulate a processing delay for the AI models.
+        try {
+            Thread.sleep(2000); // 2-second simulation
+        } catch (InterruptedException ignored) {}
+
+        OcrResult ocrResult = ocrService.extractText(new File(frontPath));
+        FaceMatchingService.MatchResult faceResult = faceMatchingService.matchFaces(new File(frontPath), new File(selfiePath));
+        
+        System.out.println("Identity Verification Analysis - User: " + username);
+        System.out.println("Expected Name: " + user.getName());
+        System.out.println("OCR Success: " + ocrResult.isSuccess());
+        if (ocrResult.isSuccess()) {
+            System.out.println("Raw OCR Text: " + ocrResult.getRawText().replace("\n", " | "));
+        }
+        System.out.println("Face Match: " + faceResult.isMatch() + " (Confidence: " + faceResult.confidence() + ")");
+
+        boolean autoVerified = false;
+        String failureReason = null;
+
+        if (ocrResult.isSuccess()) {
+            CredentialAnalyzer.AnalyzeResult analyzeResult = 
+                    credentialAnalyzer.analyze(ocrResult.getRawText(), user.getName(), idType);
+            
+            System.out.println("OCR Analyze Match: " + analyzeResult.isMatch() + " (Confidence: " + analyzeResult.confidence() + ")");
+
+            if (analyzeResult.isMatch()) {
+                if (faceResult.isMatch()) {
+                    iv.setStatus(VerificationStatus.VERIFIED);
+                    iv.setReviewedAt(LocalDateTime.now());
+                    iv.setReviewerNotes("Identity confirmed by automated OCR and biometric matching.");
+                    iv = repo.save(iv);
+                    autoVerified = true;
+                    
+                    notificationService.create(user.getId(), "verification",
+                            "Identity Verified!",
+                            "Our automated system has confirmed your identity from your " + idType.replace("_", " ") + " and biometric check.");
+                    
+                    auditLogService.log(username, AuditAction.IDENTITY_VERIFY_APPROVED,
+                            idType + " verified (OCR confidence: " + String.format("%.2f", analyzeResult.confidence()) + 
+                            ", Biometric confidence: " + String.format("%.2f", faceResult.confidence()) + ")");
+                } else {
+                    failureReason = faceResult.message();
+                }
+            } else {
+                failureReason = analyzeResult.message();
+            }
+        } else {
+            failureReason = ocrResult.getErrorMessage() != null ? ocrResult.getErrorMessage() : "The uploaded document could not be analyzed. Please ensure it is clear and well-lit.";
+        }
+
+        if (!autoVerified) {
+            System.out.println("Verification failed. Reason: " + failureReason);
+            if (failureReason != null) {
+                // Clean AI/System prefixes - refined regex to only match at the very beginning
+                failureReason = failureReason.replaceAll("(?i)^(AI|Automated system|Check Failed|Verification Failed):\\s*", "");
+                
+                iv.setStatus(VerificationStatus.REJECTED);
+                iv.setReviewedAt(LocalDateTime.now());
+                iv.setReviewerNotes(failureReason);
+                iv = repo.save(iv);
+                
+                String notificationMsg = "Face Match Failed: " + failureReason;
+                notificationService.create(user.getId(), "verification", "Verification Rejected", notificationMsg);
+                auditLogService.log(username, AuditAction.IDENTITY_VERIFY_REJECTED, idType + ": " + failureReason);
+            } else {
+                notificationService.create(user.getId(), "verification", "Identity verification submitted", "Your identity documents have been received and are under review.");
+                auditLogService.log(username, AuditAction.IDENTITY_VERIFY_SUBMITTED, idType);
+            }
+        }
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("status", iv.getStatus().name().toLowerCase());
         result.put("id", iv.getId());
         result.put("idType", iv.getIdType());
         result.put("submittedAt", iv.getSubmittedAt().toLocalDate().toString());
-        result.put("reviewedAt", null);
-        result.put("reviewerNotes", null);
+        result.put("autoVerified", autoVerified);
+        String notes = iv.getReviewerNotes();
+        if (notes != null) {
+            notes = notes.replaceAll("(?i)^(AI|Automated system|Check Failed|Verification Failed):\\s*", "");
+        }
+        result.put("reviewerNotes", notes);
         result.put("hasFrontFile", iv.getFrontFilePath() != null);
         result.put("hasBackFile", iv.getBackFilePath() != null);
         result.put("hasSelfieFile", iv.getSelfieFilePath() != null);

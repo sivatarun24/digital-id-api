@@ -52,8 +52,11 @@ CREATE TABLE user_credentials (
     reviewed_at TIMESTAMP NULL,
     verified_at TIMESTAMP NULL,
     reviewer_notes VARCHAR(1000) NULL,
+    verification_email VARCHAR(100),
+    verification_token VARCHAR(100),
     UNIQUE KEY uk_user_credential_type (user_id, credential_type),
     INDEX idx_cred_user_id (user_id),
+    INDEX idx_cred_token (verification_token),
     INDEX idx_cred_user_status (user_id, status)
 );
 

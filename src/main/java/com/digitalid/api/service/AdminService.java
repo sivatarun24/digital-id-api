@@ -30,6 +30,7 @@ public class AdminService {
     private final StorageService storageService;
     private final NotificationService notificationService;
     private final CredentialService credentialService;
+    private final InfoRequestService infoRequestService;
 
     public AdminService(UserRepository userRepository,
                         DocumentRepository documentRepository,
@@ -40,7 +41,8 @@ public class AdminService {
                         PasswordEncoder passwordEncoder,
                         StorageService storageService,
                         NotificationService notificationService,
-                        CredentialService credentialService) {
+                        CredentialService credentialService,
+                        InfoRequestService infoRequestService) {
         this.userRepository = userRepository;
         this.documentRepository = documentRepository;
         this.verificationRepository = verificationRepository;
@@ -51,6 +53,7 @@ public class AdminService {
         this.storageService = storageService;
         this.notificationService = notificationService;
         this.credentialService = credentialService;
+        this.infoRequestService = infoRequestService;
     }
 
     /** Verify the calling admin's password — throws 403 if wrong. */
@@ -128,8 +131,35 @@ public class AdminService {
             detail.put("latestVerification", buildVerificationWithUser(v));
         });
 
-        // Include documents
+        // Proactive Status Sync for documents based on credential status
+        List<UserCredential> userCredentials = credentialRepository.findByUserIdOrderByStartedAtDesc(id);
         List<Document> docs = documentRepository.findByUser_IdOrderByUploadedAtDesc(id);
+        
+        boolean repaired = false;
+        for (Document d : docs) {
+            if (d.getStatus() == DocumentStatus.PENDING) {
+                // Check if there is a verified credential of this type
+                Optional<UserCredential> matchingCred = userCredentials.stream()
+                        .filter(c -> c.getCredentialType().equals(d.getDocumentType()))
+                        .findFirst();
+                
+                if (matchingCred.isPresent() && matchingCred.get().getStatus() == VerificationStatus.VERIFIED) {
+                    d.setStatus(DocumentStatus.VERIFIED);
+                    documentRepository.save(d);
+                    repaired = true;
+                } else if (matchingCred.isPresent() && matchingCred.get().getStatus() == VerificationStatus.REJECTED) {
+                    d.setStatus(DocumentStatus.REJECTED);
+                    documentRepository.save(d);
+                    repaired = true;
+                }
+            }
+        }
+        
+        if (repaired) {
+            // Re-fetch to ensure summaries are correct
+            docs = documentRepository.findByUser_IdOrderByUploadedAtDesc(id);
+        }
+
         detail.put("documents", docs.stream().map(this::buildDocSummary).collect(Collectors.toList()));
 
         return detail;
@@ -231,13 +261,49 @@ public class AdminService {
         return result;
     }
 
+    public void deleteCredential(Long id) {
+        credentialService.deleteCredential(id);
+    }
+
+    @Transactional
     public Map<String, Object> deleteUser(Long id, String adminUsername) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
         String info = user.getUsername() + " (" + user.getEmail() + ")";
+
+        // 1. Delete Documents & Files
+        List<Document> docs = documentRepository.findByUser_IdOrderByUploadedAtDesc(id);
+        for (Document doc : docs) {
+            if (doc.getFilePath() != null) {
+                storageService.delete(doc.getFilePath());
+            }
+            documentRepository.delete(doc);
+        }
+
+        // 2. Delete Identity Verification & Files
+        verificationRepository.findByUserIdOrderBySubmittedAtDesc(id).forEach(v -> {
+            if (v.getSelfieFilePath() != null) storageService.delete(v.getSelfieFilePath());
+            if (v.getFrontFilePath() != null) storageService.delete(v.getFrontFilePath());
+            if (v.getBackFilePath() != null) storageService.delete(v.getBackFilePath());
+            verificationRepository.delete(v);
+        });
+
+        // 3. Delete Credentials (using CredentialService for detail cleanup)
+        credentialRepository.findByUserIdOrderByStartedAtDesc(id).forEach(c -> {
+            credentialService.deleteCredential(c.getId());
+        });
+
+        // 4. Delete info requests & their files
+        infoRequestService.deleteByUserId(id);
+
+        // 5. Delete notifications
+        notificationService.deleteByUserId(id);
+
+        // 6. Delete the User
         userRepository.delete(user);
-        auditLogService.log(adminUsername, AuditAction.ADMIN_USER_DELETED, "Deleted user: " + info);
-        return Map.of("message", "User deleted");
+
+        auditLogService.log(adminUsername, AuditAction.ADMIN_USER_DELETED, "Deleted user and all associated data: " + info);
+        return Map.of("message", "User and all associated data deleted");
     }
 
     // ── Verifications ────────────────────────────────────────────────────────
@@ -274,9 +340,7 @@ public class AdminService {
         }
         v.setStatus(newStatus);
         v.setReviewedAt(LocalDateTime.now());
-        if (notes != null && !notes.isBlank()) {
-            v.setReviewerNotes(notes.trim());
-        }
+        v.setReviewerNotes(notes != null && !notes.isBlank() ? notes.trim() : null);
         verificationRepository.save(v);
 
         // Send notification to user
@@ -441,6 +505,18 @@ public class AdminService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid status. Allowed: PENDING, APPROVED, REJECTED");
         }
         documentRepository.save(doc);
+
+        // Reciprocal Sync: If document is approved/rejected, update corresponding credential status
+        credentialRepository.findByUserIdAndCredentialType(doc.getUser().getId(), doc.getDocumentType())
+                .ifPresent(cred -> {
+                    if (cred.getStatus() == VerificationStatus.PENDING) {
+                        cred.setStatus(normalised.equals("VERIFIED") ? VerificationStatus.VERIFIED : VerificationStatus.REJECTED);
+                        cred.setReviewedAt(LocalDateTime.now());
+                        cred.setVerifiedAt(normalised.equals("VERIFIED") ? LocalDateTime.now() : null);
+                        cred.setReviewerNotes("Synced from manual document review: " + normalised);
+                        credentialRepository.save(cred);
+                    }
+                });
 
         // Notify user
         String title, body;

@@ -43,6 +43,7 @@ public class SecutityConfig {
                         .requestMatchers("/api/developers/me/regenerate-key").permitAll()  // API key auth
                         .requestMatchers("/api/verify").permitAll()  // API key auth handled by ApiKeyFilter
                         .requestMatchers("/api/consent/request").permitAll()  // public app info, no PII
+                        .requestMatchers("/api/credentials/verify-email").permitAll() // public token verification
                         .requestMatchers("/test/health", "/test/connectivity", "/test/smtp", "/test/email").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/info", "/actuator/prometheus", "/actuator/metrics").permitAll()
                         .requestMatchers("/api/admin/**").hasAuthority("ADMIN")

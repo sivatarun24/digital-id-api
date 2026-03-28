@@ -11,6 +11,7 @@ import java.util.Optional;
 @Repository
 public interface IdentityVerificationRepository extends JpaRepository<IdentityVerification, Long> {
     Optional<IdentityVerification> findTopByUserIdOrderBySubmittedAtDesc(Long userId);
+    List<IdentityVerification> findByUserIdOrderBySubmittedAtDesc(Long userId);
     boolean existsByUserIdAndStatus(Long userId, VerificationStatus status);
     List<IdentityVerification> findAllByOrderBySubmittedAtDesc();
     List<IdentityVerification> findByStatusOrderBySubmittedAtDesc(VerificationStatus status);

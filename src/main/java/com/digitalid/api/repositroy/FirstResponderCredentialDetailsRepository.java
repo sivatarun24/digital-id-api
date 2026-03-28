@@ -7,4 +7,5 @@ import java.util.Optional;
 
 public interface FirstResponderCredentialDetailsRepository extends JpaRepository<FirstResponderCredentialDetails, Long> {
     Optional<FirstResponderCredentialDetails> findByUserCredentialId(Long userCredentialId);
+    void deleteByUserCredentialId(Long userCredentialId);
 }
