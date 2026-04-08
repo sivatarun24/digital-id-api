@@ -15,7 +15,7 @@ RUN ./mvnw package -DskipTests -B
 FROM eclipse-temurin:17-jre
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y tesseract-ocr libtesseract-dev && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y tesseract-ocr libtesseract-dev curl && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd -r appgroup && useradd -r -g appgroup appuser
 

@@ -1,3 +1,6 @@
+-- MySQL 8+: run in the DB created by MYSQL_DATABASE (explicit USE avoids edge cases)
+USE `digital_id`;
+
 CREATE TABLE users (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     username VARCHAR(50) NOT NULL UNIQUE,
@@ -12,7 +15,7 @@ CREATE TABLE users (
     email_verified_at TIMESTAMP,
     phone_verified_at TIMESTAMP,
     -- Role & account status
-    role VARCHAR(20) NOT NULL,          -- USER, ADMIN
+    `role` VARCHAR(20) NOT NULL,          -- USER, ADMIN
     account_status VARCHAR(20) NOT NULL, -- INACTIVE, ACTIVE, DISABLED
     -- Optional deactivation fields
     deactivated_at TIMESTAMP,
@@ -64,7 +67,7 @@ CREATE TABLE military_credential_details (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     user_credential_id BIGINT NOT NULL UNIQUE,
     branch VARCHAR(100),
-    rank VARCHAR(100),
+    `rank` VARCHAR(100),
     service_start_date DATE,
     currently_serving BOOLEAN,
     service_end_date DATE,
@@ -85,7 +88,7 @@ CREATE TABLE first_responder_credential_details (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     user_credential_id BIGINT NOT NULL UNIQUE,
     agency_name VARCHAR(255),
-    role VARCHAR(150),
+    `role` VARCHAR(150),
     badge_number VARCHAR(100),
     employment_start_date DATE
 );
