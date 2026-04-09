@@ -209,11 +209,14 @@ class AuthServiceIT extends AbstractIntegrationTest {
     }
 
     private RegisterRequest buildRegisterRequest(String username, String email, String password) {
+        // Derive a unique 10-digit phone number from the nanosecond uniqueSuffix.
+        // AuthService.validatePhoneno requires a non-null phone number.
+        long phoneNo = 1_000_000_000L + (Long.parseLong(uniqueSuffix) % 9_000_000_000L);
         return new RegisterRequest(
                 username,
                 "Test User",
                 email,
-                null,           // phoneNo — optional
+                phoneNo,
                 LocalDate.of(1995, 6, 15),
                 Gender.MALE,
                 Role.USER,
