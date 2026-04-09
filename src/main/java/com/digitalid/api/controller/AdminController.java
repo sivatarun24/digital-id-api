@@ -1,11 +1,7 @@
 package com.digitalid.api.controller;
 
 import com.digitalid.api.service.AdminService;
-<<<<<<< Updated upstream
-import com.digitalid.api.service.DeveloperAppService;
-=======
 import com.digitalid.api.service.MarketingService;
->>>>>>> Stashed changes
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -21,19 +17,11 @@ import java.util.Map;
 public class AdminController {
 
     private final AdminService adminService;
-<<<<<<< Updated upstream
-    private final DeveloperAppService developerAppService;
-
-    public AdminController(AdminService adminService, DeveloperAppService developerAppService) {
-        this.adminService = adminService;
-        this.developerAppService = developerAppService;
-=======
     private final MarketingService marketingService;
 
     public AdminController(AdminService adminService, MarketingService marketingService) {
         this.adminService = adminService;
         this.marketingService = marketingService;
->>>>>>> Stashed changes
     }
 
     // ── Stats ────────────────────────────────────────────────────────────────
@@ -296,23 +284,6 @@ public class AdminController {
         return ResponseEntity.ok(adminService.getInstitutionMembers(id));
     }
 
-<<<<<<< Updated upstream
-    // ── Developer App Oversight ───────────────────────────────────────────────
-
-    @GetMapping("/apps")
-    public ResponseEntity<List<Map<String, Object>>> listApps() {
-        return ResponseEntity.ok(developerAppService.listAll());
-    }
-
-    @PutMapping("/apps/{id}/suspend")
-    public ResponseEntity<Map<String, Object>> suspendApp(@PathVariable Long id) {
-        return ResponseEntity.ok(developerAppService.setStatus(id, "SUSPENDED"));
-    }
-
-    @PutMapping("/apps/{id}/reinstate")
-    public ResponseEntity<Map<String, Object>> reinstateApp(@PathVariable Long id) {
-        return ResponseEntity.ok(developerAppService.setStatus(id, "ACTIVE"));
-=======
     // ── Marketing ────────────────────────────────────────────────────────────
 
     @GetMapping("/marketing/templates")
@@ -370,6 +341,5 @@ public class AdminController {
     @PostMapping("/marketing/campaigns/{id}/cancel")
     public ResponseEntity<Map<String, Object>> cancelMarketingCampaign(@PathVariable Long id) {
         return ResponseEntity.ok(marketingService.cancelCampaign(id));
->>>>>>> Stashed changes
     }
 }
