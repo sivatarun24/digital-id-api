@@ -1,7 +1,11 @@
 package com.digitalid.api.controller;
 
 import com.digitalid.api.service.AdminService;
+<<<<<<< Updated upstream
 import com.digitalid.api.service.DeveloperAppService;
+=======
+import com.digitalid.api.service.MarketingService;
+>>>>>>> Stashed changes
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -17,11 +21,19 @@ import java.util.Map;
 public class AdminController {
 
     private final AdminService adminService;
+<<<<<<< Updated upstream
     private final DeveloperAppService developerAppService;
 
     public AdminController(AdminService adminService, DeveloperAppService developerAppService) {
         this.adminService = adminService;
         this.developerAppService = developerAppService;
+=======
+    private final MarketingService marketingService;
+
+    public AdminController(AdminService adminService, MarketingService marketingService) {
+        this.adminService = adminService;
+        this.marketingService = marketingService;
+>>>>>>> Stashed changes
     }
 
     // ── Stats ────────────────────────────────────────────────────────────────
@@ -284,6 +296,7 @@ public class AdminController {
         return ResponseEntity.ok(adminService.getInstitutionMembers(id));
     }
 
+<<<<<<< Updated upstream
     // ── Developer App Oversight ───────────────────────────────────────────────
 
     @GetMapping("/apps")
@@ -299,5 +312,64 @@ public class AdminController {
     @PutMapping("/apps/{id}/reinstate")
     public ResponseEntity<Map<String, Object>> reinstateApp(@PathVariable Long id) {
         return ResponseEntity.ok(developerAppService.setStatus(id, "ACTIVE"));
+=======
+    // ── Marketing ────────────────────────────────────────────────────────────
+
+    @GetMapping("/marketing/templates")
+    public ResponseEntity<List<Map<String, Object>>> listMarketingTemplates() {
+        return ResponseEntity.ok(marketingService.listTemplates());
+    }
+
+    @GetMapping("/marketing/templates/{id}")
+    public ResponseEntity<Map<String, Object>> getMarketingTemplate(@PathVariable Long id) {
+        return ResponseEntity.ok(marketingService.getTemplate(id));
+    }
+
+    @PostMapping(value = "/marketing/templates", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<Map<String, Object>> createMarketingTemplate(
+            @RequestBody Map<String, String> body) {
+        return ResponseEntity.status(201).body(marketingService.createTemplate(body));
+    }
+
+    @PutMapping(value = "/marketing/templates/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<Map<String, Object>> updateMarketingTemplate(
+            @PathVariable Long id,
+            @RequestBody Map<String, String> body) {
+        return ResponseEntity.ok(marketingService.updateTemplate(id, body));
+    }
+
+    @DeleteMapping("/marketing/templates/{id}")
+    public ResponseEntity<Void> deleteMarketingTemplate(@PathVariable Long id) {
+        marketingService.deleteTemplate(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/marketing/campaigns")
+    public ResponseEntity<List<Map<String, Object>>> listMarketingCampaigns() {
+        return ResponseEntity.ok(marketingService.listCampaigns());
+    }
+
+    @PostMapping(value = "/marketing/campaigns", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<Map<String, Object>> createMarketingCampaign(
+            @RequestBody Map<String, Object> body) {
+        return ResponseEntity.status(201).body(marketingService.createCampaign(body));
+    }
+
+    @PutMapping(value = "/marketing/campaigns/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<Map<String, Object>> updateMarketingCampaign(
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> body) {
+        return ResponseEntity.ok(marketingService.updateCampaign(id, body));
+    }
+
+    @PostMapping("/marketing/campaigns/{id}/send")
+    public ResponseEntity<Map<String, Object>> sendMarketingCampaign(@PathVariable Long id) {
+        return ResponseEntity.ok(marketingService.sendCampaign(id));
+    }
+
+    @PostMapping("/marketing/campaigns/{id}/cancel")
+    public ResponseEntity<Map<String, Object>> cancelMarketingCampaign(@PathVariable Long id) {
+        return ResponseEntity.ok(marketingService.cancelCampaign(id));
+>>>>>>> Stashed changes
     }
 }

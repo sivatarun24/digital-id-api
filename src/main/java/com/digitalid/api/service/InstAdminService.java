@@ -22,6 +22,7 @@ public class InstAdminService {
     private final IdentityVerificationRepository verificationRepository;
     private final UserCredentialRepository credentialRepository;
     private final InstitutionRepository institutionRepository;
+    private final ServiceConnectionRepository serviceConnectionRepository;
     private final StorageService storageService;
     private final NotificationService notificationService;
     private final CredentialService credentialService;
@@ -31,6 +32,7 @@ public class InstAdminService {
                             IdentityVerificationRepository verificationRepository,
                             UserCredentialRepository credentialRepository,
                             InstitutionRepository institutionRepository,
+                            ServiceConnectionRepository serviceConnectionRepository,
                             StorageService storageService,
                             NotificationService notificationService,
                             CredentialService credentialService) {
@@ -39,6 +41,7 @@ public class InstAdminService {
         this.verificationRepository = verificationRepository;
         this.credentialRepository = credentialRepository;
         this.institutionRepository = institutionRepository;
+        this.serviceConnectionRepository = serviceConnectionRepository;
         this.storageService = storageService;
         this.notificationService = notificationService;
         this.credentialService = credentialService;
@@ -184,6 +187,18 @@ public class InstAdminService {
 
         detail.put("documents", documentRepository.findByUser_IdOrderByUploadedAtDesc(userId)
                 .stream().map(this::buildDocSummary).collect(Collectors.toList()));
+
+        List<Map<String, Object>> connectedServices = serviceConnectionRepository.findByUserId(userId)
+                .stream().map(cs -> {
+                    Map<String, Object> svcMap = new LinkedHashMap<>();
+                    svcMap.put("serviceSlug", cs.getServiceSlug());
+                    svcMap.put("connectedAt", cs.getConnectedAt() != null
+                            ? cs.getConnectedAt().toLocalDate().toString() : null);
+                    svcMap.put("lastUsedAt", cs.getLastUsedAt() != null
+                            ? cs.getLastUsedAt().toLocalDate().toString() : null);
+                    return svcMap;
+                }).collect(Collectors.toList());
+        detail.put("connectedServices", connectedServices);
 
         return detail;
     }

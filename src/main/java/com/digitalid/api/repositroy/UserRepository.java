@@ -4,6 +4,7 @@ import com.digitalid.api.controller.models.AccountStatus;
 import com.digitalid.api.controller.models.Role;
 import com.digitalid.api.controller.models.User;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -32,4 +33,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
     long countByRole(Role role);
 
     long countByAccountStatus(AccountStatus accountStatus);
+
+    @Query("SELECT u FROM User u WHERE u.marketingOptIn = :optIn")
+    List<User> findByMarketingOptIn(boolean optIn);
 }
