@@ -133,6 +133,26 @@
             <scope>test</scope>
         </dependency>
 
+        <!-- Testcontainers — integration tests against real MySQL -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers</artifactId>
+            <version>1.21.3</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>mysql</artifactId>
+            <version>1.21.3</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>1.21.3</version>
+            <scope>test</scope>
+        </dependency>
+
         <dependency>
             <groupId>dev.samstevens.totp</groupId>
             <artifactId>totp-spring-boot-starter</artifactId>
@@ -172,6 +192,24 @@
                     </annotationProcessorPaths>
                 </configuration>
             </plugin>
+            <!-- Failsafe: runs *IT.java classes in the integration-test phase.
+                 Integration tests (*IT.java) use Testcontainers to spin up a real
+                 MySQL container. Requires Docker — works natively on Linux CI.
+                 On macOS Docker Desktop 4.60+, you may need to set
+                 DOCKER_API_VERSION=1.41 if the default API version is rejected. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>

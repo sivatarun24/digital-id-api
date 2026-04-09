@@ -26,9 +26,16 @@ jobs:
       - name: Run backend tests
         run: ./mvnw verify -B
 
-      - name: Upload test results
+      - name: Upload unit test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: backend-test-results
+          name: backend-unit-test-results
           path: target/surefire-reports/
+
+      - name: Upload integration test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-integration-test-results
+          path: target/failsafe-reports/
