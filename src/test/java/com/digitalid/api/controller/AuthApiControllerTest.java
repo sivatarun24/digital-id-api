@@ -2,6 +2,7 @@ package com.digitalid.api.controller;
 
 import com.digitalid.api.controller.models.*;
 import com.digitalid.api.service.AuthService;
+import com.digitalid.api.service.MarketingService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,6 +30,7 @@ class AuthApiControllerTest {
     @Autowired private ObjectMapper objectMapper;
 
     @MockitoBean private AuthService authService;
+    @MockitoBean private MarketingService marketingService;
 
     @Test
     void login_withValidRequest_shouldReturn200() throws Exception {

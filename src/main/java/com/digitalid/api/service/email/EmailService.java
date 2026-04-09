@@ -136,6 +136,11 @@ public class EmailService {
         send(authRequest(to, subject, body));
     }
 
+    /** Send a raw HTML email directly (used by marketing campaign execution). */
+    public void sendHtmlEmail(String to, String subject, String bodyHtml) {
+        send(marketingRequest(to, subject, bodyHtml));
+    }
+
     // ── MARKETING emails ─────────────────────────────────────────
 
     public void sendPromotionalEmail(String to, String username, String promoTitle,
