@@ -5,6 +5,8 @@ import com.digitalid.api.audit.AuditLogService;
 import com.digitalid.api.controller.models.*;
 import com.digitalid.api.repositroy.*;
 import com.digitalid.api.service.storage.StorageService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -19,6 +21,8 @@ import java.util.stream.Collectors;
 
 @Service
 public class AdminService {
+
+    private static final Logger log = LoggerFactory.getLogger(AdminService.class);
 
     private final UserRepository userRepository;
     private final DocumentRepository documentRepository;
@@ -181,7 +185,9 @@ public class AdminService {
 
         Role role = Role.USER;
         if (body.get("role") != null && !body.get("role").isBlank()) {
-            try { role = Role.valueOf(body.get("role").toUpperCase()); } catch (IllegalArgumentException ignored) {}
+            try { role = Role.valueOf(body.get("role").toUpperCase()); } catch (IllegalArgumentException e) {
+                log.warn("[Admin] Unrecognised role '{}' — defaulting to USER", body.get("role"));
+            }
         }
         AccountStatus status = AccountStatus.ACTIVE;
 
@@ -200,10 +206,14 @@ public class AdminService {
                 .build();
 
         if (body.get("phoneNo") != null && !body.get("phoneNo").isBlank()) {
-            try { user.setPhoneNo(Long.parseLong(body.get("phoneNo"))); } catch (NumberFormatException ignored) {}
+            try { user.setPhoneNo(Long.parseLong(body.get("phoneNo"))); } catch (NumberFormatException e) {
+                log.warn("[Admin] Invalid phoneNo '{}' — skipping", body.get("phoneNo"));
+            }
         }
         if (role == Role.INST_ADMIN && body.get("institutionId") != null) {
-            try { user.setInstitutionId(Long.parseLong(body.get("institutionId"))); } catch (NumberFormatException ignored) {}
+            try { user.setInstitutionId(Long.parseLong(body.get("institutionId"))); } catch (NumberFormatException e) {
+                log.warn("[Admin] Invalid institutionId '{}' — skipping", body.get("institutionId"));
+            }
         }
 
         userRepository.save(user);

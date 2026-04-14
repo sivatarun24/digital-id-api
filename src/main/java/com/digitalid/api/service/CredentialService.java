@@ -8,6 +8,8 @@ import com.digitalid.api.service.ocr.CredentialAnalyzer;
 import com.digitalid.api.service.ocr.OcrResult;
 import com.digitalid.api.service.ocr.OcrService;
 import com.digitalid.api.service.storage.StorageService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -28,6 +30,8 @@ import java.util.stream.Collectors;
 @Service
 @Transactional
 public class CredentialService {
+
+    private static final Logger log = LoggerFactory.getLogger(CredentialService.class);
 
     private static final Set<String> AVAILABLE_TYPES = Set.of(
             "military", "student", "first_responder", "teacher",
@@ -230,12 +234,23 @@ public class CredentialService {
 
         // --- No Email Provided (e.g. Senior): Immediate AI OCR ---
         credentialRepository.save(cred);
+        log.info("[Credential] Running OCR on submitted document — user={}, type={}, file={}, size={} bytes",
+                username, credentialType, file.getOriginalFilename(), file.getSize());
         OcrResult ocrResult = ocrService.extractText(file);
-        
+        log.info("[Credential] OCR result — success={}", ocrResult.isSuccess());
         if (ocrResult.isSuccess()) {
-            CredentialAnalyzer.AnalyzeResult analyzeResult = 
+            log.debug("[Credential] OCR raw text: [{}]",
+                    ocrResult.getRawText().replace("\n", " | "));
+        } else {
+            log.warn("[Credential] OCR failed: {}", ocrResult.getErrorMessage());
+        }
+
+        if (ocrResult.isSuccess()) {
+            CredentialAnalyzer.AnalyzeResult analyzeResult =
                     credentialAnalyzer.analyze(ocrResult.getRawText(), user.getName(), credentialType);
-            
+            log.info("[Credential] Analyze result — match={} (conf={:.4f}): {}",
+                    analyzeResult.isMatch(), analyzeResult.confidence(), analyzeResult.message());
+
             if (analyzeResult.isMatch()) {
                 cred.setStatus(VerificationStatus.VERIFIED);
                 cred.setVerifiedAt(LocalDateTime.now());

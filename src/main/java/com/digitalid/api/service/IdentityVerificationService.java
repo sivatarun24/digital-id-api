@@ -15,6 +15,8 @@ import com.digitalid.api.service.ocr.FaceMatchingService;
 import com.digitalid.api.service.ocr.OcrResult;
 import com.digitalid.api.service.ocr.OcrService;
 import com.digitalid.api.service.storage.StorageService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -23,11 +25,17 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.util.*;
 
 @Service
 public class IdentityVerificationService {
+
+    private static final Logger log = LoggerFactory.getLogger(IdentityVerificationService.class);
 
     private final IdentityVerificationRepository repo;
     private final UserRepository userRepository;
@@ -110,8 +118,10 @@ public class IdentityVerificationService {
 
         // ── Store front file + create Document record ──────────────────────────
         int frontSeq = documentRepository.countByUser_IdAndDocumentType(user.getId(), docType) + 1;
+        log.debug("[IdVerify] Storing front file for user={} docType={} seq={}", user.getId(), docType, frontSeq);
         String frontPath = storageService.store(
                 user.getId(), docType, frontSeq, frontFile.getOriginalFilename(), frontFile);
+        log.debug("[IdVerify] Front file stored at: {}", frontPath);
         Document frontDoc = documentRepository.save(Document.builder()
                 .user(user).documentType(docType).status(DocumentStatus.PENDING)
                 .originalFileName(frontFile.getOriginalFilename())
@@ -123,8 +133,10 @@ public class IdentityVerificationService {
         Document backDoc = null;
         if (backFile != null && !backFile.isEmpty()) {
             int backSeq = documentRepository.countByUser_IdAndDocumentType(user.getId(), docType) + 1;
+            log.debug("[IdVerify] Storing back file for user={} docType={} seq={}", user.getId(), docType, backSeq);
             backPath = storageService.store(
                     user.getId(), docType, backSeq, backFile.getOriginalFilename(), backFile);
+            log.debug("[IdVerify] Back file stored at: {}", backPath);
             backDoc = documentRepository.save(Document.builder()
                     .user(user).documentType(docType).status(DocumentStatus.PENDING)
                     .originalFileName(backFile.getOriginalFilename())
@@ -134,8 +146,10 @@ public class IdentityVerificationService {
 
         // ── Store selfie — no Document record for selfies ──────────────────────
         int selfieSeq = documentRepository.countByUser_IdAndDocumentType(user.getId(), "selfie") + 1;
+        log.debug("[IdVerify] Storing selfie for user={} seq={}", user.getId(), selfieSeq);
         String selfiePath = storageService.store(
                 user.getId(), "selfie", selfieSeq, selfieFile.getOriginalFilename(), selfieFile);
+        log.debug("[IdVerify] Selfie stored at: {}", selfiePath);
 
         // ── Save verification record ───────────────────────────────────────────
         IdentityVerification iv = IdentityVerification.builder()
@@ -149,20 +163,50 @@ public class IdentityVerificationService {
         iv = repo.save(iv);
 
         // --- Automated System Verification Analysis ---
+        // Download files to local temp so OCR and face matching (which need File objects) work
+        // regardless of whether storage is local disk or GCS.
+        File frontTmp = null;
+        File selfieTmp = null;
+        boolean frontIsTmp = false;
+        boolean selfieIsTmp = false;
         try {
-            Thread.sleep(2000);
-        } catch (InterruptedException ignored) {}
-
-        OcrResult ocrResult = ocrService.extractText(new File(frontPath));
-        FaceMatchingService.MatchResult faceResult = faceMatchingService.matchFaces(new File(frontPath), new File(selfiePath));
-
-        System.out.println("Identity Verification Analysis - User: " + username);
-        System.out.println("Expected Name: " + user.getName());
-        System.out.println("OCR Success: " + ocrResult.isSuccess());
-        if (ocrResult.isSuccess()) {
-            System.out.println("Raw OCR Text: " + ocrResult.getRawText().replace("\n", " | "));
+            File local = new File(frontPath);
+            if (local.exists()) {
+                frontTmp = local;
+            } else {
+                frontTmp = loadToTempFile(frontPath, ".front");
+                frontIsTmp = true;
+            }
+            local = new File(selfiePath);
+            if (local.exists()) {
+                selfieTmp = local;
+            } else {
+                selfieTmp = loadToTempFile(selfiePath, ".selfie");
+                selfieIsTmp = true;
+            }
+        } catch (IOException e) {
+            log.warn("[IdVerify] Could not load files for analysis (user={}, iv={}): {}", username, iv.getId(), e.getMessage());
         }
-        System.out.println("Face Match: " + faceResult.isMatch() + " (Confidence: " + faceResult.confidence() + ")");
+
+        log.info("[IdVerify] Starting automated analysis — user={}, idType={}, iv={}", username, idType, iv.getId());
+        log.debug("[IdVerify] Expected name: {}", user.getName());
+
+        OcrResult ocrResult = frontTmp != null
+                ? ocrService.extractText(frontTmp)
+                : OcrResult.builder().success(false).errorMessage("Front image could not be loaded for analysis").build();
+
+        FaceMatchingService.MatchResult faceResult = (frontTmp != null && selfieTmp != null)
+                ? faceMatchingService.matchFaces(frontTmp, selfieTmp)
+                : new FaceMatchingService.MatchResult(0.0, false, "Images could not be loaded for biometric analysis");
+
+        log.info("[IdVerify] OCR success={}, Face match={} (conf={:.4f})",
+                ocrResult.isSuccess(), faceResult.isMatch(), faceResult.confidence());
+        if (ocrResult.isSuccess()) {
+            log.debug("[IdVerify] OCR raw text: [{}]",
+                    ocrResult.getRawText().replace("\n", " | "));
+        } else {
+            log.debug("[IdVerify] OCR error: {}", ocrResult.getErrorMessage());
+        }
 
         boolean autoVerified = false;
         String failureReason = null;
@@ -171,7 +215,8 @@ public class IdentityVerificationService {
             CredentialAnalyzer.AnalyzeResult analyzeResult =
                     credentialAnalyzer.analyze(ocrResult.getRawText(), user.getName(), idType);
 
-            System.out.println("OCR Analyze Match: " + analyzeResult.isMatch() + " (Confidence: " + analyzeResult.confidence() + ")");
+            log.info("[IdVerify] OCR analyze match={} (conf={:.4f}): {}",
+                    analyzeResult.isMatch(), analyzeResult.confidence(), analyzeResult.message());
 
             if (analyzeResult.isMatch()) {
                 if (faceResult.isMatch()) {
@@ -180,6 +225,9 @@ public class IdentityVerificationService {
                     iv.setReviewerNotes("Identity confirmed by automated OCR and biometric matching.");
                     iv = repo.save(iv);
                     autoVerified = true;
+
+                    log.info("[IdVerify] Auto-verified user={} idType={} (OCR conf={:.2f}, biometric conf={:.2f})",
+                            username, idType, analyzeResult.confidence(), faceResult.confidence());
 
                     notificationService.create(user.getId(), "verification",
                             "Identity Verified!",
@@ -198,8 +246,12 @@ public class IdentityVerificationService {
             failureReason = ocrResult.getErrorMessage() != null ? ocrResult.getErrorMessage() : "The uploaded document could not be analyzed. Please ensure it is clear and well-lit.";
         }
 
+        // Clean up temp files (only delete files we downloaded, not original local files)
+        if (frontIsTmp  && frontTmp  != null) frontTmp.delete();
+        if (selfieIsTmp && selfieTmp != null) selfieTmp.delete();
+
         if (!autoVerified) {
-            System.out.println("Verification failed. Reason: " + failureReason);
+            log.info("[IdVerify] Verification not auto-approved — reason: {}", failureReason);
             if (failureReason != null) {
                 failureReason = failureReason.replaceAll("(?i)^(AI|Automated system|Check Failed|Verification Failed):\\s*", "");
 
@@ -282,6 +334,20 @@ public class IdentityVerificationService {
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /**
+     * Downloads a GCS object to a local temp file for OCR/face-matching.
+     */
+    private File loadToTempFile(String storedPath, String suffix) throws IOException {
+        log.debug("[IdVerify] Downloading from storage for analysis: {}", storedPath);
+        Resource resource = storageService.load(storedPath);
+        Path temp = Files.createTempFile("idv_", suffix);
+        try (InputStream in = resource.getInputStream()) {
+            Files.copy(in, temp, StandardCopyOption.REPLACE_EXISTING);
+        }
+        log.debug("[IdVerify] Downloaded to temp file: {} ({} bytes)", temp, temp.toFile().length());
+        return temp.toFile();
+    }
 
     private Map<String, Object> toDocMap(Document doc) {
         Map<String, Object> map = new LinkedHashMap<>();

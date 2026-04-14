@@ -3,6 +3,8 @@ package com.digitalid.api.service;
 import com.digitalid.api.controller.models.DeveloperApp;
 import com.digitalid.api.repositroy.DeveloperAppRepository;
 import com.digitalid.api.service.email.EmailService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -18,6 +20,7 @@ import java.util.stream.Collectors;
 @Service
 public class DeveloperAppService {
 
+    private static final Logger log = LoggerFactory.getLogger(DeveloperAppService.class);
     private static final String KEY_PREFIX_TEMPLATE = "digid_sk_";
     private static final int PREFIX_TOTAL_LENGTH = 15; // "digid_sk_" (9) + 6 random chars
 
@@ -69,7 +72,9 @@ public class DeveloperAppService {
             emailService.sendAccountUpdateEmail(ownerEmail, name,
                     "Your Digital ID developer app \"" + name + "\" has been registered. " +
                     "Your API key starts with: " + prefix + "... Keep it secret!");
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            log.warn("[DevApp] Registration confirmation email failed for {}: {}", ownerEmail, e.getMessage());
+        }
 
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("id", app.getId());

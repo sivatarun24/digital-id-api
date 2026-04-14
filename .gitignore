@@ -52,3 +52,5 @@ docker-compose.override.yml
 k8s/
 uploads/
 digital-id-api.postman_collection.json
+# GCP credentials (never commit)
+gcp-credentials.json
