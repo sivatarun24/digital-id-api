@@ -15,13 +15,23 @@ RUN ./mvnw package -DskipTests -B
 FROM eclipse-temurin:17-jre
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y tesseract-ocr libtesseract-dev && rm -rf /var/lib/apt/lists/*
+# tesseract-ocr-eng provides the English language data (eng.traineddata).
+# curl is needed for the Docker healthcheck.
+RUN apt-get update && \
+    apt-get install -y tesseract-ocr tesseract-ocr-eng libtesseract-dev curl && \
+    rm -rf /var/lib/apt/lists/*
+
+# Print detected tessdata location at build time for visibility.
+RUN find /usr/share/tesseract-ocr -name "eng.traineddata" 2>/dev/null || echo "WARNING: eng.traineddata not found"
 
 RUN groupadd -r appgroup && useradd -r -g appgroup appuser
 
 COPY --from=build /app/target/*.jar app.jar
+COPY entrypoint.sh entrypoint.sh
 
-RUN mkdir -p /app/logs && chown -R appuser:appgroup /app
+RUN mkdir -p /app/logs /app/gcp && \
+    chmod +x /app/entrypoint.sh && \
+    chown -R appuser:appgroup /app
 
 USER appuser
 
@@ -30,8 +40,4 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:8080/actuator/health || exit 1
 
-ENTRYPOINT ["java", \
-    "-XX:+UseContainerSupport", \
-    "-XX:MaxRAMPercentage=75.0", \
-    "-Djava.security.egd=file:/dev/./urandom", \
-    "-jar", "app.jar"]
+ENTRYPOINT ["/app/entrypoint.sh"]

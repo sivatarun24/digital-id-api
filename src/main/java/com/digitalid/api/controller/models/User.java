@@ -42,8 +42,6 @@ public class User {
 
     private LocalDateTime passwordUpdatedAt;
 
-//    private Boolean isVerified;
-
     private LocalDateTime emailVerifiedAt;
 
     private LocalDateTime phoneVerifiedAt;
@@ -58,11 +56,6 @@ public class User {
     @Column(name = "account_status", nullable = false, length = 20)
     @Enumerated(EnumType.STRING)
     private AccountStatus accountStatus; // INACTIVE, ACTIVE, DISABLED
-
-//    private LocalDateTime deactivatedAt;
-//
-//    @Column(length = 255)
-//    private String deactivationReason;
 
     private LocalDateTime lastLoginAt;
 
@@ -92,7 +85,6 @@ public class User {
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
         this.accountStatus = AccountStatus.INACTIVE;
-//        this.isVerified = false;
     }
 
     @PreUpdate

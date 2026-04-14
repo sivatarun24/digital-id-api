@@ -71,6 +71,12 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      GCS_BUCKET_NAME: ${GCS_BUCKET_NAME}
+      GOOGLE_APPLICATION_CREDENTIALS: /app/gcp/credentials.json
+    volumes:
+      # Copy ~/.config/gcloud/application_default_credentials.json to ./gcp-credentials.json
+      # (the original file is 600 and unreadable by the container user)
+      - ./gcp-credentials.json:/app/gcp/credentials.json:ro
     depends_on:
       mysql:
         condition: service_healthy

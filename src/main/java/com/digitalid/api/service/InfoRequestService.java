@@ -6,6 +6,8 @@ import com.digitalid.api.repositroy.UserRepository;
 import com.digitalid.api.service.storage.StorageService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
@@ -21,6 +23,8 @@ import java.util.*;
 
 @Service
 public class InfoRequestService {
+
+    private static final Logger log = LoggerFactory.getLogger(InfoRequestService.class);
 
     private final InfoRequestRepository infoRequestRepository;
     private final UserRepository userRepository;
@@ -216,7 +220,9 @@ public class InfoRequestService {
             } else {
                 // backward compat: old records stored before cloud storage migration
                 Path dir = Paths.get(uploadsDir, "info-responses", String.valueOf(req.getId()));
-                try { Files.deleteIfExists(dir.resolve(f.get("filename"))); } catch (IOException ignored) {}
+                try { Files.deleteIfExists(dir.resolve(f.get("filename"))); } catch (IOException e) {
+                    log.warn("[InfoRequest] Failed to delete legacy file {}: {}", f.get("filename"), e.getMessage());
+                }
             }
         }
     }

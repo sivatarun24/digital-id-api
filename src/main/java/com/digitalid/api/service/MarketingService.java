@@ -8,6 +8,8 @@ import com.digitalid.api.repositroy.MarketingTemplateRepository;
 import com.digitalid.api.repositroy.UserRepository;
 import com.digitalid.api.service.email.EmailService;
 import jakarta.annotation.PostConstruct;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,6 +20,8 @@ import java.util.stream.Collectors;
 
 @Service
 public class MarketingService {
+
+    private static final Logger log = LoggerFactory.getLogger(MarketingService.class);
 
     private final MarketingTemplateRepository templateRepo;
     private final MarketingCampaignRepository campaignRepo;
@@ -190,8 +194,8 @@ public class MarketingService {
         for (MarketingCampaign c : due) {
             try {
                 executeSend(c);
-            } catch (Exception ignored) {
-                // log and continue
+            } catch (Exception e) {
+                log.error("[Marketing] Scheduled campaign id={} failed: {}", c.getId(), e.getMessage());
             }
         }
     }
@@ -208,8 +212,8 @@ public class MarketingService {
             for (User u : users) {
                 try {
                     emailService.sendHtmlEmail(u.getEmail(), t.getSubject(), t.getBodyHtml());
-                } catch (Exception ignored) {
-                    // continue sending to remaining users
+                } catch (Exception e) {
+                    log.warn("[Marketing] Email failed for user {}: {}", u.getEmail(), e.getMessage());
                 }
             }
         }

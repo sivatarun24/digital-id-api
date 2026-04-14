@@ -64,7 +64,7 @@ CREATE TABLE military_credential_details (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     user_credential_id BIGINT NOT NULL UNIQUE,
     branch VARCHAR(100),
-    rank VARCHAR(100),
+    `rank` VARCHAR(100),
     service_start_date DATE,
     currently_serving BOOLEAN,
     service_end_date DATE,
