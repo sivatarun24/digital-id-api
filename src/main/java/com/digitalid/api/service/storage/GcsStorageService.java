@@ -49,16 +49,14 @@ public class GcsStorageService implements StorageService {
         try {
             Bucket bucket = storage.get(bucketName);
             if (bucket == null) {
-                throw new IllegalStateException(
-                        "GCS bucket '" + bucketName + "' does not exist or is not accessible. " +
-                        "Check the bucket name and that credentials have 'Storage Object User' on it.");
+                log.warn("[GCS] Bucket '{}' not found or not accessible at startup — " +
+                         "check the bucket name and that the service account has 'Storage Object User'", bucketName);
+            } else {
+                log.info("[GCS] Bucket '{}' is accessible — storage ready", bucketName);
             }
-            log.info("[GCS] Bucket '{}' is accessible — storage ready", bucketName);
-        } catch (IllegalStateException e) {
-            throw e;
         } catch (Exception e) {
-            throw new IllegalStateException(
-                    "GCS initialisation failed for bucket '" + bucketName + "': " + e.getMessage(), e);
+            log.warn("[GCS] Bucket validation failed at startup for '{}': {} — " +
+                     "storage calls will fail until this is resolved", bucketName, e.getMessage());
         }
     }
 
