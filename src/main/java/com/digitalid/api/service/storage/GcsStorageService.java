@@ -39,7 +39,7 @@ public class GcsStorageService implements StorageService {
     public String store(Long userId, String documentType, int sequenceNumber,
                         String originalFilename, MultipartFile file) throws IOException {
         String ext        = extension(originalFilename);
-        String objectName = "documents/" + userId + "/"
+        String objectName = "digital-id-documents/" + userId + "/"
                 + userId + "_" + documentType + "_" + sequenceNumber + ext;
 
         BlobId   blobId   = BlobId.of(bucketName, objectName);
