@@ -67,6 +67,16 @@ public class GcsStorageService implements StorageService {
     }
 
     @Override
+    public String storeWithPath(String relPath, String contentType, MultipartFile file) throws IOException {
+        BlobId   blobId   = BlobId.of(bucketName, relPath);
+        BlobInfo blobInfo = BlobInfo.newBuilder(blobId)
+                .setContentType(contentType != null ? contentType : "application/octet-stream")
+                .build();
+        storage.create(blobInfo, file.getBytes());
+        return relPath;
+    }
+
+    @Override
     public void delete(String storedPath) {
         try { storage.delete(BlobId.of(bucketName, storedPath)); } catch (Exception ignored) {}
     }
