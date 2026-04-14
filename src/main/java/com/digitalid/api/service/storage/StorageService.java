@@ -17,6 +17,16 @@ public interface StorageService {
     String store(Long userId, String documentType, int sequenceNumber,
                  String originalFilename, MultipartFile file) throws IOException;
 
+    /**
+     * Stores a file at an arbitrary relative path.
+     * Dev:  absolute local path  (e.g. /app/uploads/info-responses/7/0_doc.pdf)
+     * Prod: GCS object name      (e.g. info-responses/7/0_doc.pdf)
+     *
+     * @param relPath     relative path such as "info-responses/{requestId}/{filename}"
+     * @param contentType MIME type of the file
+     */
+    String storeWithPath(String relPath, String contentType, MultipartFile file) throws IOException;
+
     Resource load(String storedPath) throws IOException;
 
     void delete(String storedPath);

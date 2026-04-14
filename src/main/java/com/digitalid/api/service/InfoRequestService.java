@@ -3,6 +3,7 @@ package com.digitalid.api.service;
 import com.digitalid.api.controller.models.InfoRequest;
 import com.digitalid.api.repositroy.InfoRequestRepository;
 import com.digitalid.api.repositroy.UserRepository;
+import com.digitalid.api.service.storage.StorageService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
@@ -24,16 +25,19 @@ public class InfoRequestService {
     private final InfoRequestRepository infoRequestRepository;
     private final UserRepository userRepository;
     private final ObjectMapper objectMapper;
+    private final StorageService storageService;
 
     @Value("${app.uploads.dir:uploads}")
     private String uploadsDir;
 
     public InfoRequestService(InfoRequestRepository infoRequestRepository,
                               UserRepository userRepository,
-                              ObjectMapper objectMapper) {
+                              ObjectMapper objectMapper,
+                              StorageService storageService) {
         this.infoRequestRepository = infoRequestRepository;
         this.userRepository = userRepository;
         this.objectMapper = objectMapper;
+        this.storageService = storageService;
     }
 
     public Map<String, Object> createRequest(Long userId, String note, String source, String requestedBy) {
@@ -92,8 +96,6 @@ public class InfoRequestService {
 
         List<Map<String, String>> filesMeta = new ArrayList<>();
         if (files != null && files.length > 0) {
-            Path dir = Paths.get(uploadsDir, "info-responses", String.valueOf(requestId));
-            Files.createDirectories(dir);
             for (int i = 0; i < files.length; i++) {
                 MultipartFile f = files[i];
                 String orig = f.getOriginalFilename();
@@ -102,11 +104,13 @@ public class InfoRequestService {
                     ext = orig.substring(orig.lastIndexOf("."));
                 }
                 String filename = i + "_" + (orig != null ? orig.replaceAll("[^a-zA-Z0-9._-]", "_") : "file" + ext);
-                Files.copy(f.getInputStream(), dir.resolve(filename));
+                String relPath = "info-responses/" + requestId + "/" + filename;
+                String storedPath = storageService.storeWithPath(relPath, f.getContentType(), f);
                 Map<String, String> meta = new LinkedHashMap<>();
                 meta.put("name", orig != null ? orig : "file");
                 meta.put("mimeType", f.getContentType() != null ? f.getContentType() : "application/octet-stream");
                 meta.put("filename", filename);
+                meta.put("storedPath", storedPath);
                 filesMeta.add(meta);
             }
         }
@@ -133,7 +137,17 @@ public class InfoRequestService {
         if (fileIndex < 0 || fileIndex >= meta.size()) {
             throw new RuntimeException("File not found");
         }
-        Path filePath = Paths.get(uploadsDir, "info-responses", String.valueOf(requestId), meta.get(fileIndex).get("filename"));
+        Map<String, String> fileMeta = meta.get(fileIndex);
+        String storedPath = fileMeta.get("storedPath");
+        if (storedPath != null) {
+            try {
+                return storageService.load(storedPath);
+            } catch (IOException e) {
+                throw new RuntimeException("Could not load file", e);
+            }
+        }
+        // backward compat: old records stored before cloud storage migration
+        Path filePath = Paths.get(uploadsDir, "info-responses", String.valueOf(requestId), fileMeta.get("filename"));
         return new FileSystemResource(filePath);
     }
 
@@ -195,12 +209,15 @@ public class InfoRequestService {
 
     private void deleteResponseFiles(InfoRequest req) {
         List<Map<String, String>> meta = parseFilesMeta(req.getUserResponseFilesMeta());
-        if (!meta.isEmpty()) {
-            Path dir = Paths.get(uploadsDir, "info-responses", String.valueOf(req.getId()));
-            for (Map<String, String> f : meta) {
+        for (Map<String, String> f : meta) {
+            String storedPath = f.get("storedPath");
+            if (storedPath != null) {
+                storageService.delete(storedPath);
+            } else {
+                // backward compat: old records stored before cloud storage migration
+                Path dir = Paths.get(uploadsDir, "info-responses", String.valueOf(req.getId()));
                 try { Files.deleteIfExists(dir.resolve(f.get("filename"))); } catch (IOException ignored) {}
             }
-            try { Files.deleteIfExists(dir); } catch (IOException ignored) {}
         }
     }
 }

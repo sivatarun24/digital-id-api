@@ -48,6 +48,14 @@ public class LocalStorageService implements StorageService {
     }
 
     @Override
+    public String storeWithPath(String relPath, String contentType, MultipartFile file) throws IOException {
+        Path dest = Paths.get(uploadsDir, relPath).toAbsolutePath();
+        Files.createDirectories(dest.getParent());
+        file.transferTo(dest.toFile());
+        return dest.toString();
+    }
+
+    @Override
     public void delete(String storedPath) {
         try { Files.deleteIfExists(Paths.get(storedPath)); } catch (IOException ignored) {}
     }
