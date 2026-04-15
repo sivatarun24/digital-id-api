@@ -113,6 +113,7 @@ public class MarketingService {
 
     // ── Campaigns ──────────────────────────────────────────────────────────
 
+    @Transactional(readOnly = true)
     public List<Map<String, Object>> listCampaigns() {
         return campaignRepo.findAll().stream()
                 .map(this::campaignToMap)
